@@ -12,8 +12,8 @@ Environment=NODE_ENV=production
 Environment=HOST=127.0.0.1
 Environment=PORT=3000
 Environment=KIEAN_CONFIG=/etc/kiean/config.json
-Environment=GOOGLE_APPLICATION_CREDENTIALS=/etc/kiean/google-service-account.json
 Environment=KIEAN_DATA_DIR=/var/lib/kiean
+EnvironmentFile=/etc/kiean/kiean.env
 Environment=TRUST_PROXY=1
 Restart=on-failure
 UMask=0077

@@ -7,7 +7,7 @@
       "id": "teacher-1",
       "name": "REPLACE with the teacher’s approved name",
       "bio": "REPLACE with the teacher’s approved short introduction",
-      "calendarId": "REPLACE@group.calendar.google.com",
+      "googleEmail": "REPLACE with the teacher's Google account email",
       "programs": ["online"],
       "branches": ["online"],
       "weekly": {

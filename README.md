@@ -37,36 +37,41 @@ Academic and After School programs remain described as 2 learners to 1 teacher, 
 
 ## Connect Google Calendar
 
-Use a Google account controlled by KieAn to own each teacher’s calendar. The server uses a service account to read availability and add events to calendars already owned by KieAn. No Google secrets are sent to a visitor’s browser.
+Each teacher authorizes their own Google account. KieAn reads free/busy periods and creates private events on that account’s primary calendar. The server verifies that the signed-in Google email exactly matches the teacher’s configured `googleEmail`; OAuth tokens stay server-side and refresh tokens are encrypted in SQLite.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create or select the KieAn project and enable **Google Calendar API**.
-2. Create a service account and download its JSON key. Keep it **outside the public website folder**, for example `/etc/kiean/google-service-account.json`. Do not commit or upload this key to a public repository.
-3. In Google Calendar, use the teacher’s existing scheduling calendar, or have KieAn create a dedicated calendar for that teacher. Share it with the service account’s `client_email` and grant **Make changes to events**. Share it with the teacher as well, so it appears in the teacher’s Google Calendar.
-4. Copy the **Calendar ID** from that calendar’s **Settings → Integrate calendar**. Use the ID rather than the public calendar URL.
-5. Put every unavailable period on this connected calendar as a **Busy** event. If a dedicated booking calendar is used, events on the teacher’s separate personal calendar are not automatically checked. Staff must copy those unavailable periods to the connected calendar or use the actual scheduling calendar directly.
-6. Copy `config.example.json` to a private `config.json`. Replace all teacher placeholders, set the correct `calendarId`, working hours and blackout dates, and set `mode` to `live`. Set `publicOrigin` to the exact HTTPS website origin, for example `https://kieantutorial.com`.
-7. Set the following server environment variables:
+2. Configure the OAuth consent screen and create an OAuth client ID with application type **Web application**. Add the production URL `https://kieantutorial.com/api/google/callback` as an authorized redirect URI (replace the domain with the deployed site). Calendar access scopes may require Google OAuth app verification before general availability; do not leave the app in Testing for production because test-user refresh tokens can expire after seven days.
+3. Copy `config.example.json` to a private `config.json`. Add each teacher’s exact Google account email as `googleEmail`, then set their programs, branches, working hours and blackout dates. Set `mode` to `live` and `publicOrigin` to the exact HTTPS site origin.
+4. Set the following server environment variables. Generate the encryption key once and keep it stable; changing it makes existing teacher connections unreadable.
 
 ```sh
 export NODE_ENV=production
 export KIEAN_CONFIG=/etc/kiean/config.json
-export GOOGLE_APPLICATION_CREDENTIALS=/etc/kiean/google-service-account.json
+export GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
+export GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
+export KIEAN_TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 export KIEAN_DATA_DIR=/var/lib/kiean
 ```
 
-8. Run `npm run check-calendar`. This checks that each calendar’s availability is readable without creating events. The service account must also have write permission as configured in step 3.
-9. Deploy behind HTTPS, then complete one controlled five-session test booking. Confirm that all five events appear on the correct teacher calendar, in Philippine Time, and that the same slots are no longer offered. Remove that test booking with the cancellation command below after validation.
+For the supplied systemd unit, put the OAuth client ID, client secret and one generated encryption key in `/etc/kiean/kiean.env` as `GOOGLE_OAUTH_CLIENT_ID=...`, `GOOGLE_OAUTH_CLIENT_SECRET=...` and `KIEAN_TOKEN_ENCRYPTION_KEY=...` (without `export`). Set restrictive file permissions, for example `chmod 600 /etc/kiean/kiean.env`. Generate the encryption value once with `openssl rand -base64 32` and preserve it in your secret backup.
 
-The included service-account flow does not add attendees. It therefore does not send automatic parent invitations, and it does not require Google Workspace domain-wide delegation. Teachers see the events through the calendar shared with them. Calendar notification settings can be configured by each calendar user.
+5. Deploy behind HTTPS. Give each teacher their individual connection link: `https://kieantutorial.com/api/teachers/TEACHER_ID/google/connect`, replacing `TEACHER_ID` with their configured id. The teacher signs into the matching Google account and approves calendar access. The callback confirms the connection; unconnected teachers cannot be booked.
+6. Run `npm run check-calendar`. This checks each teacher calendar without creating events.
+7. Complete a controlled five-session test booking. Confirm that all five events appear on the correct teacher calendar, in Philippine Time, and that the same slots are no longer offered. Remove that test booking with the cancellation command below after validation.
 
-Official Google references: [server-to-server authorization](https://developers.google.com/identity/protocols/oauth2/service-account), [FreeBusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query), [event creation](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert).
+The integration does not add attendees, so it does not send automatic parent invitations. Each teacher can revoke KieAn access from their Google Account security settings; they will need to reconnect before bookings can resume.
+
+If replacing an already-live service-account setup, this change does not migrate old events or pending requests. Back up the database, resolve pending requests, and move or recreate existing schedule events on each teacher’s primary calendar before switching traffic; otherwise the new availability check will not see events left on the old shared calendars.
+
+Official Google references: [web-server OAuth flow](https://developers.google.com/identity/protocols/oauth2/web-server), [FreeBusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query), [event creation](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert).
 
 ## Teacher configuration
 
-Each teacher needs a unique `id` and unique `calendarId`. A single teacher should appear once, even if they teach several programs or branches. Their connected calendar prevents overlaps across those programs and branches.
+Each teacher needs a unique `id` and unique `googleEmail`. A single teacher should appear once, even if they teach several programs or branches. Their connected primary calendar prevents overlaps across those programs and branches.
 
 | Setting | Meaning |
 | --- | --- |
+| `googleEmail` | Exact Google account email the teacher will authorize |
 | `programs` | Any of `online`, `academic`, `after-school`, `sped` |
 | `branches` | `online`, `san-pedro`, `pila`, `natania`, `south-square`, `san-francisco`, `maliksi`, `naic` |
 | `weekly` | Day keys: `0` Sunday, `1` Monday, through `6` Saturday |
@@ -84,7 +89,9 @@ The existing `CNAME` contains `kieantutorial.com` and is preserved. No DNS chang
 
 Use the included `deploy/kiean.service.example` and `deploy/Caddyfile.example` as deployment templates on the agreed VPS. Install Node 24, create a `kiean` service user, place application files in `/opt/kiean`, private configuration in `/etc/kiean`, and create `/var/lib/kiean` owned by that service user. Verify the Node executable path in the systemd template. The proxy needs the actual domain’s DNS pointing to the VPS before it can obtain an HTTPS certificate.
 
-The backend serves only explicitly allowed public files and approved image assets. Keep configuration, service-account credentials and the database outside any independently configured static web root. Proxy the whole website to the Node server; do not serve the complete source directory publicly.
+The backend serves only explicitly allowed public files and approved image assets. Keep configuration, OAuth secrets, the token encryption key and database outside any independently configured static web root. Back up the encryption key separately and securely with the database; losing it prevents existing teacher connections from being decrypted. Proxy the whole website to the Node server; do not serve the complete source directory publicly.
+
+GitHub Actions runs the tests and builds the Docker image on pushes and pull requests. Pushes publish to `ghcr.io/OWNER/REPOSITORY` with a `sha-...` tag and a branch tag; the default branch also updates `latest`. GHCR packages are private by default, so grant the deployment host package-read access or change the package visibility before pulling anonymously.
 
 `TRUST_PROXY=1` is appropriate only when the Node server is reachable exclusively through the trusted proxy. It enables per-client rate limits using the final forwarded address. Keep the Node listener on `127.0.0.1` for the provided VPS setup. A Dockerfile is also supplied for container deployments; mount private config and persistent data at runtime.
 

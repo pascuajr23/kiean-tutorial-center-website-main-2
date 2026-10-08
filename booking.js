@@ -36,11 +36,11 @@ function renderPrograms(){
 }
 function renderTeachers(){
   const eligible=state.teachers.filter(t=>t.programs.includes(state.program)&&t.branches.includes(state.mode==='online'?'online':state.branch));
-  if(!eligible.some(t=>t.id===state.teacher))state.teacher='';
+  if(!eligible.some(t=>t.id===state.teacher&&(state.preview||t.googleConnected)))state.teacher='';
   $('teachers').replaceChildren(...eligible.map(t=>{
-    const card=node('label',undefined,'teacher-card');const radio=node('input');radio.type='radio';radio.name='teacher';radio.value=t.id;radio.checked=t.id===state.teacher;
+    const connected=state.preview||t.googleConnected;const card=node('label',undefined,'teacher-card');const radio=node('input');radio.type='radio';radio.name='teacher';radio.value=t.id;radio.checked=t.id===state.teacher;radio.disabled=!connected;
     radio.addEventListener('change',()=>{state.teacher=t.id;resetSchedule();renderTeachers();});
-    const avatar=node('span',t.name.split(' ').map(s=>s[0]).slice(0,2).join(''),'teacher-avatar');avatar.setAttribute('aria-hidden','true');const copy=node('span');copy.append(node('strong',t.name),node('small',t.bio||'Choose this teacher to see available dates.'));card.append(radio,avatar,copy);return card;
+    const avatar=node('span',t.name.split(' ').map(s=>s[0]).slice(0,2).join(''),'teacher-avatar');avatar.setAttribute('aria-hidden','true');const copy=node('span');copy.append(node('strong',t.name),node('small',connected?(t.bio||'Choose this teacher to see available dates.'):'Google Calendar setup is pending. Please contact the center.'));card.append(radio,avatar,copy);return card;
   }));
   if(!eligible.length)$('teachers').append(node('p','No teacher is available for this program and branch yet. Please contact the center.','empty-teachers'));
   $('to-dates').disabled=!state.teacher;updateSummary();
