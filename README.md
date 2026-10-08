@@ -93,6 +93,53 @@ The backend serves only explicitly allowed public files and approved image asset
 
 GitHub Actions runs the tests and builds the Docker image on pushes and pull requests. Pushes publish to `ghcr.io/OWNER/REPOSITORY` with a `sha-...` tag and a branch tag; the default branch also updates `latest`. GHCR packages are private by default, so grant the deployment host package-read access or change the package visibility before pulling anonymously.
 
+### Pull and run with Docker Compose
+
+On the deployment host, replace `OWNER/REPOSITORY` with the lowercase GitHub owner and repository. For a private GHCR package, authenticate with a GitHub personal access token that has `read:packages`; skip login if the package is public.
+
+```sh
+docker login ghcr.io --username YOUR_GITHUB_USERNAME
+docker pull ghcr.io/OWNER/REPOSITORY:latest
+mkdir -p data
+```
+
+Create a private `config.json` from `config.example.json` and finish the live teacher, calendar, and HTTPS settings described above. Create `kiean.env` beside it with the runtime settings and secrets:
+
+```dotenv
+NODE_ENV=production
+KIEAN_CONFIG=/etc/kiean/config.json
+KIEAN_DATA_DIR=/var/lib/kiean
+GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
+KIEAN_TOKEN_ENCRYPTION_KEY=your-stable-base64-32-byte-key
+```
+
+Restrict access to both private files (`chmod 600 config.json kiean.env`). Add this `compose.yaml` beside them:
+
+```yaml
+services:
+  kiean:
+    image: ghcr.io/OWNER/REPOSITORY:latest
+    restart: unless-stopped
+    env_file:
+      - ./kiean.env
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./config.json:/etc/kiean/config.json:ro
+      - ./data:/var/lib/kiean
+```
+
+Start the service and check its logs:
+
+```sh
+docker compose pull
+docker compose up -d
+docker compose logs -f kiean
+```
+
+The localhost-only port mapping works with the included Caddy reverse-proxy example. To deploy a specific commit instead of the latest default-branch image, replace `latest` in `compose.yaml` with its immutable `sha-...` tag. To update later, run `docker compose pull && docker compose up -d`; the `data` directory and `config.json` remain on the host.
+
 `TRUST_PROXY=1` is appropriate only when the Node server is reachable exclusively through the trusted proxy. It enables per-client rate limits using the final forwarded address. Keep the Node listener on `127.0.0.1` for the provided VPS setup. A Dockerfile is also supplied for container deployments; mount private config and persistent data at runtime.
 
 Keep one persistent SQLite database shared by the application processes on the same host. Do not run independent copies against different databases for the same teacher calendars. Site requests reserve all slots in one SQLite transaction, including overlapping 30-minute start times, before touching Google Calendar. Back up the database securely using SQLite-aware backups or while the service is stopped. Calendar and booking records contain personal information; apply the center’s retention process.
