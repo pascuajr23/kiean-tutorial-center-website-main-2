@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BookingStore} from '../lib/store.mjs';
@@ -98,4 +98,20 @@ test('teacher OAuth callback requires matching state cookie and configured Googl
   }
   assert.equal((await connect()).status,403);assert.equal(store.hasGoogleToken('teacher-1'),false);
   signedInEmail='teacher@example.test';assert.equal((await connect()).status,200);assert.equal(store.googleToken('teacher-1').email,'teacher@example.test');
+});
+test('admin roster editor authenticates, persists updates and deactivates booking',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-admin-')),configPath=join(dir,'config.json'),adminConfig={...config,mode:'live',teachers:config.teachers.map(teacher=>({...teacher}))},store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,8).toString('base64')});
+  store.saveGoogleToken('teacher-1','teacher@example.test','refresh-token');
+  Object.defineProperty(adminConfig,'configFile',{value:configPath});
+  const app=createApp({config:adminConfig,configPath,store,adminCredentials:{username:'center-admin',password:'private-password'}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>app.close(r));store.close();rmSync(dir,{recursive:true,force:true});});
+  const base='http://127.0.0.1:'+app.address().port,authorization='Basic '+Buffer.from('center-admin:private-password').toString('base64');
+  assert.equal((await fetch(base+'/admin')).status,401);assert.equal((await fetch(base+'/api/admin/teachers')).status,401);
+  const loaded=await fetch(base+'/api/admin/teachers',{headers:{Authorization:authorization}});assert.equal(loaded.status,200);
+  const teachers=(await loaded.json()).teachers;teachers[0].available=false;
+  const changedEmail=teachers.map(teacher=>({...teacher}));changedEmail[0].googleEmail='new@example.test';
+  const rejected=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers:changedEmail})});assert.equal(rejected.status,409);
+  const saved=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers})});assert.equal(saved.status,200);
+  const persisted=JSON.parse(readFileSync(configPath,'utf8'));assert.equal(adminConfig.teachers[0].available,false);assert.equal(persisted.teachers[0].available,false);assert.equal(persisted.teachers[0].googleConnected,undefined);
+  assert.throws(()=>validateBooking(payload(),adminConfig,NOW),/available teacher/);
 });

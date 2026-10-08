@@ -1,4 +1,6 @@
 config.json
+config/
+kiean.env
 secrets
 data
 node_modules

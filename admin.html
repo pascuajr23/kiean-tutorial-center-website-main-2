@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Teacher availability | KieAn Tutorial Center</title>
+  <link rel="icon" href="assets/kiean-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="admin-responsive.css">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <a href="/index.html" aria-label="KieAn home"><img src="assets/kiean-logo.png" alt="KieAn Tutorial Center"></a>
+    <a class="admin-site-link" href="/index.html">Public website <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="admin-main">
+    <div class="admin-heading">
+      <div><span class="admin-kicker">CENTER OPERATIONS</span><h1>Teacher availability</h1><p>Roster settings for the public booking calendar.</p></div>
+      <div class="roster-stats" aria-live="polite"><span><strong id="teacher-count">—</strong> teachers</span><span><strong id="bookable-count">—</strong> ready to book</span></div>
+    </div>
+    <div id="admin-message" class="admin-message" role="status" aria-live="polite">Loading teacher roster…</div>
+    <form id="roster-form" hidden>
+      <div id="teacher-list" class="teacher-list"></div>
+      <div class="admin-actions">
+        <button id="add-teacher" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add teacher</button>
+        <button id="save-roster" class="button button-primary" type="submit">Save changes</button>
+      </div>
+    </form>
+  </main>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

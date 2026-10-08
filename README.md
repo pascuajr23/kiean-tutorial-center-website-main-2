@@ -50,14 +50,17 @@ export KIEAN_CONFIG=/etc/kiean/config.json
 export GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
 export GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
 export KIEAN_TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+export KIEAN_ADMIN_USER=center-admin
+export KIEAN_ADMIN_PASSWORD='replace-with-a-long-unique-password'
 export KIEAN_DATA_DIR=/var/lib/kiean
 ```
 
-For the supplied systemd unit, put the OAuth client ID, client secret and one generated encryption key in `/etc/kiean/kiean.env` as `GOOGLE_OAUTH_CLIENT_ID=...`, `GOOGLE_OAUTH_CLIENT_SECRET=...` and `KIEAN_TOKEN_ENCRYPTION_KEY=...` (without `export`). Set restrictive file permissions, for example `chmod 600 /etc/kiean/kiean.env`. Generate the encryption value once with `openssl rand -base64 32` and preserve it in your secret backup.
+For the supplied systemd unit, put the OAuth client ID, client secret, one generated encryption key, and admin username/password in `/etc/kiean/kiean.env` (without `export`). Set restrictive file permissions, for example `chmod 600 /etc/kiean/kiean.env`. Generate the encryption value once with `openssl rand -base64 32` and preserve it in your secret backup. Keep the admin password private and use the admin page only through HTTPS.
 
 5. Deploy behind HTTPS. Give each teacher their individual connection link: `https://kieantutorial.com/api/teachers/TEACHER_ID/google/connect`, replacing `TEACHER_ID` with their configured id. The teacher signs into the matching Google account and approves calendar access. The callback confirms the connection; unconnected teachers cannot be booked.
-6. Run `npm run check-calendar`. This checks each teacher calendar without creating events.
-7. Complete a controlled five-session test booking. Confirm that all five events appear on the correct teacher calendar, in Philippine Time, and that the same slots are no longer offered. Remove that test booking with the cancellation command below after validation.
+6. Open `https://kieantutorial.com/admin` and sign in with `KIEAN_ADMIN_USER` and `KIEAN_ADMIN_PASSWORD`. Add teachers, toggle booking availability, select their programs and branches, and set weekly hours in Philippine Time. New teachers start with no hours and are disabled until configured. Save changes to update public booking options immediately. Existing teacher IDs cannot be removed, and a connected teacher’s Google email cannot be changed here.
+7. Run `npm run check-calendar`. This checks each teacher calendar without creating events.
+8. Complete a controlled five-session test booking. Confirm that all five events appear on the correct teacher calendar, in Philippine Time, and that the same slots are no longer offered. Remove that test booking with the cancellation command below after validation.
 
 The integration does not add attendees, so it does not send automatic parent invitations. Each teacher can revoke KieAn access from their Google Account security settings; they will need to reconnect before bookings can resume.
 
@@ -72,6 +75,7 @@ Each teacher needs a unique `id` and unique `googleEmail`. A single teacher shou
 | Setting | Meaning |
 | --- | --- |
 | `googleEmail` | Exact Google account email the teacher will authorize |
+| `available` | `true` to include the teacher in booking choices; `false` to pause new bookings |
 | `programs` | Any of `online`, `academic`, `after-school`, `sped` |
 | `branches` | `online`, `san-pedro`, `pila`, `natania`, `south-square`, `san-francisco`, `maliksi`, `naic` |
 | `weekly` | Day keys: `0` Sunday, `1` Monday, through `6` Saturday |
@@ -81,13 +85,13 @@ Each teacher needs a unique `id` and unique `googleEmail`. A single teacher shou
 
 Working periods generate start times every 30 minutes and require the full hour to fit before closing. Lunch breaks, holidays and approved operating hours must be supplied by the center. The PDF does not establish 9 AM–5 PM or 10 PM as current operating hours; those unsupported claims were removed from the public site. Hours in the sample configuration are examples only.
 
-Restart the server after changing the configuration. Existing confirmed bookings are not moved automatically if a teacher’s working hours or calendar assignment changes. Keep existing teacher IDs and calendar assignments stable where possible.
+Teacher roster changes saved from `/admin` apply immediately. Restart the server after manual configuration edits. Existing confirmed bookings are not moved automatically if a teacher’s working hours or calendar assignment changes. Keep existing teacher IDs and calendar assignments stable where possible.
 
 ## Hosting
 
 The existing `CNAME` contains `kieantutorial.com` and is preserved. No DNS changes have been made.
 
-Use the included `deploy/kiean.service.example` and `deploy/Caddyfile.example` as deployment templates on the agreed VPS. Install Node 24, create a `kiean` service user, place application files in `/opt/kiean`, private configuration in `/etc/kiean`, and create `/var/lib/kiean` owned by that service user. Verify the Node executable path in the systemd template. The proxy needs the actual domain’s DNS pointing to the VPS before it can obtain an HTTPS certificate.
+Use the included `deploy/kiean.service.example` and `deploy/Caddyfile.example` as deployment templates on the agreed VPS. Install Node 24, create a `kiean` service user, place application files in `/opt/kiean`, and create `/etc/kiean` owned by that user so the admin page can atomically save roster changes. Keep OAuth/admin secrets in root-owned `/etc/kiean-secrets/kiean.env`, readable by the `kiean` group, and create `/var/lib/kiean` owned by the service user. The systemd sandbox allows writes only to the roster config and persistent data directories. Verify the Node executable path in the systemd template. The proxy needs the actual domain’s DNS pointing to the VPS before it can obtain an HTTPS certificate.
 
 The backend serves only explicitly allowed public files and approved image assets. Keep configuration, OAuth secrets, the token encryption key and database outside any independently configured static web root. Back up the encryption key separately and securely with the database; losing it prevents existing teacher connections from being decrypted. Proxy the whole website to the Node server; do not serve the complete source directory publicly.
 
@@ -100,10 +104,10 @@ On the deployment host, replace `OWNER/REPOSITORY` with the lowercase GitHub own
 ```sh
 docker login ghcr.io --username YOUR_GITHUB_USERNAME
 docker pull ghcr.io/OWNER/REPOSITORY:latest
-mkdir -p data
+mkdir -p config data
 ```
 
-Create a private `config.json` from `config.example.json` and finish the live teacher, calendar, and HTTPS settings described above. Create `kiean.env` beside it with the runtime settings and secrets:
+Create `config/config.json` from `config.example.json` and finish the live teacher, calendar, and HTTPS settings described above. Create `kiean.env` beside `compose.yaml` with the runtime settings and secrets:
 
 ```dotenv
 NODE_ENV=production
@@ -112,9 +116,11 @@ KIEAN_DATA_DIR=/var/lib/kiean
 GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
 GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
 KIEAN_TOKEN_ENCRYPTION_KEY=your-stable-base64-32-byte-key
+KIEAN_ADMIN_USER=center-admin
+KIEAN_ADMIN_PASSWORD=replace-with-a-long-unique-password
 ```
 
-Restrict access to both private files (`chmod 600 config.json kiean.env`). Add this `compose.yaml` beside them:
+Restrict access to the private settings (`chmod 700 config && chmod 600 config/config.json kiean.env`). Add this `compose.yaml` beside them:
 
 ```yaml
 services:
@@ -126,7 +132,7 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
-      - ./config.json:/etc/kiean/config.json:ro
+      - ./config:/etc/kiean
       - ./data:/var/lib/kiean
 ```
 
@@ -138,7 +144,7 @@ docker compose up -d
 docker compose logs -f kiean
 ```
 
-The localhost-only port mapping works with the included Caddy reverse-proxy example. To deploy a specific commit instead of the latest default-branch image, replace `latest` in `compose.yaml` with its immutable `sha-...` tag. To update later, run `docker compose pull && docker compose up -d`; the `data` directory and `config.json` remain on the host.
+The localhost-only port mapping works with the included Caddy reverse-proxy example. To deploy a specific commit instead of the latest default-branch image, replace `latest` in `compose.yaml` with its immutable `sha-...` tag. To update later, run `docker compose pull && docker compose up -d`; the `data` and `config` directories remain on the host.
 
 `TRUST_PROXY=1` is appropriate only when the Node server is reachable exclusively through the trusted proxy. It enables per-client rate limits using the final forwarded address. Keep the Node listener on `127.0.0.1` for the provided VPS setup. A Dockerfile is also supplied for container deployments; mount private config and persistent data at runtime.
 

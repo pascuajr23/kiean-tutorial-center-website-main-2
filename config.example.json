@@ -5,11 +5,46 @@
   "teachers": [
     {
       "id": "teacher-1",
-      "name": "REPLACE with the teacher’s approved name",
-      "bio": "REPLACE with the teacher’s approved short introduction",
-      "googleEmail": "REPLACE with the teacher's Google account email",
+      "name": "REPLACE with teacher one's approved name",
+      "bio": "REPLACE with teacher one's approved short introduction",
+      "googleEmail": "teacher1@example.com",
+      "available": true,
       "programs": ["online"],
       "branches": ["online"],
+      "weekly": {
+        "1": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "2": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "3": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "4": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "5": [["09:00", "12:00"], ["13:00", "17:00"]]
+      },
+      "blackoutDates": []
+    },
+    {
+      "id": "teacher-2",
+      "name": "REPLACE with teacher two's approved name",
+      "bio": "REPLACE with teacher two's approved short introduction",
+      "googleEmail": "teacher2@example.com",
+      "available": true,
+      "programs": ["academic", "after-school"],
+      "branches": ["natania"],
+      "weekly": {
+        "1": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "2": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "3": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "4": [["09:00", "12:00"], ["13:00", "17:00"]],
+        "5": [["09:00", "12:00"], ["13:00", "17:00"]]
+      },
+      "blackoutDates": []
+    },
+    {
+      "id": "teacher-3",
+      "name": "REPLACE with teacher three's approved name",
+      "bio": "REPLACE with teacher three's approved short introduction",
+      "googleEmail": "teacher3@example.com",
+      "available": true,
+      "programs": ["sped"],
+      "branches": ["online", "maliksi"],
       "weekly": {
         "1": [["09:00", "12:00"], ["13:00", "17:00"]],
         "2": [["09:00", "12:00"], ["13:00", "17:00"]],

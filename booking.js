@@ -35,7 +35,7 @@ function renderPrograms(){
   renderTeachers();
 }
 function renderTeachers(){
-  const eligible=state.teachers.filter(t=>t.programs.includes(state.program)&&t.branches.includes(state.mode==='online'?'online':state.branch));
+  const eligible=state.teachers.filter(t=>t.available!==false&&t.programs.includes(state.program)&&t.branches.includes(state.mode==='online'?'online':state.branch));
   if(!eligible.some(t=>t.id===state.teacher&&(state.preview||t.googleConnected)))state.teacher='';
   $('teachers').replaceChildren(...eligible.map(t=>{
     const connected=state.preview||t.googleConnected;const card=node('label',undefined,'teacher-card');const radio=node('input');radio.type='radio';radio.name='teacher';radio.value=t.id;radio.checked=t.id===state.teacher;radio.disabled=!connected;
