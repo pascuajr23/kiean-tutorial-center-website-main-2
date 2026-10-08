@@ -1,0 +1,5 @@
+# Use the domain from your approved configuration and point its DNS to this VPS.
+kieantutorial.com {
+    reverse_proxy 127.0.0.1:3000
+    encode zstd gzip
+}

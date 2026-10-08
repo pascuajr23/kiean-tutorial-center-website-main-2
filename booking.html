@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book Tutorial Sessions | KieAn Tutorial Center</title>
+  <meta name="description" content="Choose a KieAn teacher and book at least five tutorial sessions at the same time on your selected dates.">
+  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="booking.css">
+</head>
+<body class="booking-page">
+  <header class="booking-header"><div class="container"><a href="index.html" aria-label="KieAn home"><img src="assets/kiean-logo.png" alt="KieAn Tutorial Center"></a><a class="back-home" href="index.html">← Back to website</a><span class="timezone-label">Philippine Time · UTC+8</span></div></header>
+  <main class="container booking-main">
+    <div class="booking-intro"><span class="section-kicker">A LITTLE ROUTINE. A LOT OF GROWTH.</span><h1>Make time for <span>learning.</span></h1><p>Choose your teacher, pick your dates and keep one time for every session.</p></div>
+    <div id="connection-status" class="notice" role="status">Loading booking availability…</div>
+    <nav aria-label="Booking progress"><ol class="booking-steps"><li aria-current="step"><span>1</span> Teacher & program</li><li><span>2</span> Dates & time</li><li><span>3</span> Details & review</li></ol></nav>
+    <div class="booking-layout">
+      <div class="booking-workspace">
+        <div id="error" class="form-error" role="alert" tabindex="-1" hidden></div>
+        <section id="step-1" class="step-panel" aria-labelledby="step-1-title">
+          <div class="panel-title"><span class="step-eyebrow">STEP 01</span><h2 id="step-1-title" tabindex="-1">A teacher for your learner</h2><p>Start with a program and your preferred teacher.</p></div>
+          <div class="mode-tabs" role="group" aria-label="Lesson format"><button type="button" data-mode="online" aria-pressed="true">Online tutorial</button><button type="button" data-mode="branch" aria-pressed="false">At a branch</button></div>
+          <div class="field-grid"><label>Program<select id="program"></select></label><label id="branch-field" hidden>Branch<select id="branch"></select></label></div>
+          <div id="program-info" class="program-info"></div>
+          <fieldset class="teacher-fieldset"><legend>Choose your teacher</legend><div id="teachers" class="teacher-options"></div></fieldset>
+          <div class="panel-actions"><span>At least 5 sessions per booking</span><button id="to-dates" class="btn btn-orange" type="button" disabled>Choose dates & time →</button></div>
+        </section>
+        <section id="step-2" class="step-panel" aria-labelledby="step-2-title" hidden>
+          <div class="panel-title"><span class="step-eyebrow">STEP 02</span><h2 id="step-2-title" tabindex="-1">Build your learning routine</h2><p>Select at least five dates, then choose a time available on every date.</p></div>
+          <div class="quick-select"><div><strong>Monday to Friday, made easy</strong><small>Add weekdays from the displayed week or the next available week.</small></div><button id="add-week" type="button" class="btn btn-outline">Add Mon–Fri</button></div>
+          <div class="calendar-toolbar"><button id="prev-month" type="button" class="icon-button" aria-label="Previous month">←</button><h3 id="calendar-title" aria-live="polite"></h3><button id="next-month" type="button" class="icon-button" aria-label="Next month">→</button></div>
+          <div class="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div id="calendar" class="date-grid" role="group" aria-label="Choose lesson dates"></div>
+          <div class="calendar-legend"><span><i class="legend-selected"></i> Selected</span><span><i class="legend-unavailable"></i> Unavailable</span><button id="clear-dates" type="button" class="text-button">Clear dates</button></div>
+          <div id="selected-dates" class="date-chips" aria-live="polite"></div>
+          <div class="time-section"><div class="time-heading"><h3>One time for every session</h3><span>Philippine Time</span></div><p id="time-help">Select your dates to see shared availability.</p><div id="time-slots" class="time-slots" role="group" aria-label="Choose a shared time slot"></div><p id="time-status" role="status"></p></div>
+          <div class="panel-actions"><button type="button" class="btn btn-outline" data-back="1">← Teacher</button><button id="to-details" type="button" class="btn btn-orange" disabled>Continue to details →</button></div>
+        </section>
+        <section id="step-3" class="step-panel" aria-labelledby="step-3-title" hidden>
+          <div class="panel-title"><span class="step-eyebrow">STEP 03</span><h2 id="step-3-title" tabindex="-1">A few details, and you’re ready</h2><p>Review all dates and your shared time before submitting.</p></div>
+          <form id="booking-form">
+            <div class="field-grid"><label>Parent / guardian name<input name="parentName" required maxlength="100" autocomplete="name"></label><label>Email address<input type="email" name="email" required maxlength="200" autocomplete="email"></label><label>Contact number<input type="tel" name="phone" required minlength="7" maxlength="30" autocomplete="tel"></label><label>Learner’s first name<input name="studentName" required maxlength="80" autocomplete="off"></label><label>Grade level<select name="grade" required><option value="">Select a grade</option><option>Nursery</option><option>Kindergarten</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option></select></label></div>
+            <label class="notes-field">What would you like help with? <span>(optional)</span><textarea name="notes" rows="3" maxlength="1000" placeholder="For example: reading practice or help with Math assignments."></textarea><small>Please share medical reports directly with the center, outside this form.</small></label>
+            <label class="honeypot" aria-hidden="true">Leave empty<input name="website" tabindex="-1" autocomplete="off"></label>
+            <div class="review-box"><h3>Your session dates</h3><div id="review-sessions"></div></div>
+            <p class="fee-note" id="fee-note"></p>
+            <label class="consent"><input type="checkbox" name="consent" required><span>I am the parent or guardian. I agree to share these details with KieAn for scheduling and follow-up, and I have reviewed all selected dates and the shared time. <a href="#privacy-details">How booking details are used</a></span></label>
+            <div class="panel-actions"><button type="button" class="btn btn-outline" data-back="2">← Dates & time</button><button id="submit-booking" type="submit" class="btn btn-orange">Confirm sessions →</button></div>
+          </form>
+          <details id="privacy-details"><summary>How booking details are used</summary><p>KieAn uses the parent’s contact details, learner’s first name, grade and learning request to arrange these lessons. Booking records are stored on the center’s booking server, and scheduling details are shared with the assigned teacher through Google Calendar. No payment details or medical documents are collected. Contact the center through its Facebook page to request a correction or deletion.</p></details>
+        </section>
+        <section id="confirmation" class="step-panel confirmation" tabindex="-1" hidden></section>
+      </div>
+      <aside class="booking-summary" aria-label="Booking summary"><div class="summary-top"><span>YOUR LEARNING PLAN</span><h2>A routine that works<br>for your family.</h2></div><div class="summary-body"><dl><div><dt>Program</dt><dd id="summary-program">Online Tutorial</dd></div><div><dt>Teacher</dt><dd id="summary-teacher">Choose a teacher</dd></div><div id="summary-location-row" hidden><dt>Branch</dt><dd id="summary-location"></dd></div><div><dt>Time for all sessions</dt><dd id="summary-time">Choose a time slot</dd></div></dl><div class="session-progress"><div><strong id="session-count">0 sessions</strong><span id="minimum-status">Minimum 5</span></div><progress id="session-progress" value="0" max="5" aria-label="Progress toward minimum five sessions"></progress><small id="session-hint">Your learning routine starts with five dates.</small></div><div class="summary-note"><span aria-hidden="true">✦</span><p id="duration-note">50 minutes of focused learning, plus 10 minutes between lessons.</p></div><p class="calendar-note" id="calendar-note">All times are shown in Philippine Time.</p></div></aside>
+    </div>
+    <div class="booking-help"><strong>Need help choosing a program?</strong> <a href="https://www.facebook.com/profile.php?id=61593257580081" target="_blank" rel="noopener noreferrer">Contact KieAn →</a></div>
+  </main>
+  <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span></footer>
+  <script type="module" src="booking.js"></script>
+</body></html>

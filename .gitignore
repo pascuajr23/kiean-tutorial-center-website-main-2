@@ -1,0 +1,6 @@
+config.json
+secrets/
+data/
+node_modules/
+*.log
+.env

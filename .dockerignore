@@ -1,0 +1,9 @@
+config.json
+secrets
+data
+node_modules
+tests
+docs
+*.zip
+.git
+.env
