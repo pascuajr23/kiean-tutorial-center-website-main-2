@@ -133,6 +133,7 @@ test('live config allows http://localhost origin only outside production',t=>{
   write('http://localhost:3000');assert.equal(loadConfig().publicOrigin,'http://localhost:3000');
   write('http://kiean.example');assert.throws(()=>loadConfig(),/HTTPS/);
   process.env.NODE_ENV='production';write('http://localhost:3000');assert.throws(()=>loadConfig(),/HTTPS/);
+  writeFileSync(file,'"mode": "live",\n"publicOrigin": "https://kieantutorial.com",');assert.throws(()=>loadConfig(),/not valid JSON.*starting with \{/);
 });
 const pdf=Buffer.from('%PDF-1.4 receipt').toString('base64'),png=Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1]).toString('base64');
 const weekdays=count=>{const out=[];for(let d='2030-06-03';out.length<count;d=addDays(d,1))if(![0,6].includes(new Date(d+'T00:00:00Z').getUTCDay()))out.push(d);return out;};

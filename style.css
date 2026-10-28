@@ -1484,7 +1484,14 @@ img {
 .gallery-item img {
     display: block;
     width: 100%;
-    height: auto;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    object-position: top;
+}
+
+.permit-grid .gallery-item img {
+    object-fit: contain;
+    background: var(--white);
 }
 
 .gallery-item:focus-visible {
