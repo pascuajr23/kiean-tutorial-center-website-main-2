@@ -1,21 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BookingStore} from '../lib/store.mjs';
 import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
-import {validateBooking} from '../lib/domain.mjs';
+import {validateBooking,validateAttachments} from '../lib/domain.mjs';
+import {mime,teacherEmail,parentScheduleEmail} from '../lib/mailer.mjs';
 import {loadConfig} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
-import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay} from '../shared.mjs';
+import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay,sessionRate,addDays} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true});
-function fakeCalendar(options={}){return {events:new Map(),creates:0,removes:0,async busy(){if(options.busyError)throw new Error('Offline');return options.busy||[];},async create(b,s){this.creates++;this.events.set(s.date,s);if(options.failAt===this.creates){const e=new Error('Write failed');if(!options.uncertain)e.status=400;throw e;}return {};},async remove(b,s){this.removes++;if(options.deleteError)throw new Error('Offline');this.events.delete(s.date);}};}
+function fakeCalendar(options={}){return {events:new Map(),creates:0,removes:0,async busy(){if(options.busyError)throw new Error('Offline');return options.busy||[];},async create(b,s){this.creates++;this.events.set(s.date,s);if(options.failAt===this.creates){const e=new Error('Write failed');if(!options.uncertain)e.status=400;throw e;}return {};},async remove(b,s){this.removes++;if(options.deleteError)throw new Error('Offline');this.events.delete(s.date);},invites:0,async createInvite(){this.invites++;return {hangoutLink:'https://meet.google.com/kie-ann-abc'};},async removeInvite(){this.invites--;}};}
 function harness(t,options={}){const store=new BookingStore(':memory:');t.after(()=>store.close());const calendar=fakeCalendar(options),service=new BookingService(config,store,calendar);return {store,calendar,service};}
 test('five Mon–Fri dates create five equal slots in Philippine Time',async t=>{
   const {service,calendar}=harness(t);const b=await service.book(payload(),NOW);assert.equal(b.sessions.length,5);assert.equal(calendar.events.size,5);assert.equal(b.sessions[0].start,'2030-06-03T02:00:00.000Z');assert.equal(b.sessions[0].end,'2030-06-03T03:00:00.000Z');assert.equal(b.lessonMinutes,50);
@@ -23,11 +24,19 @@ test('five Mon–Fri dates create five equal slots in Philippine Time',async t=>
 test('server enforces minimum, uniqueness, range, grade, consent and teacher hours',()=>{
   for(const change of [{dates:payload().dates.slice(0,4)},{dates:Array(5).fill('2030-06-03')},{dates:['2030-02-30',...payload().dates.slice(1)]},{dates:['2030-06-02',...payload().dates.slice(1)]},{time:'17:00'},{time:'10:17'},{grade:'Grade 7'},{consent:false},{dates:[null,...payload().dates.slice(1)]},{dates:['2031-06-03',...payload().dates.slice(1)]},{teacher:'not-a-teacher'},{email:'invalid'}])assert.throws(()=>validateBooking({...payload(),...change},config,NOW));
 });
-test('all booking programs enforce minimum of five',()=>{
-  for(const program of PROGRAMS)assert.throws(()=>validateBooking({...payload(),program:program.id,branch:program.mode==='online'?'online':'natania',dates:payload().dates.slice(0,4)},config,NOW),/between 5/);
+test('online needs 5 sessions and face-to-face programs need 20',()=>{
+  for(const program of PROGRAMS){
+    const dates=program.mode==='online'?payload().dates.slice(0,4):payload().dates;
+    assert.equal(program.minSessions,program.mode==='online'?5:20);
+    assert.throws(()=>validateBooking({...payload(),program:program.id,branch:program.mode==='online'?'online':'natania',dates},config,NOW),new RegExp(`between ${program.minSessions} `));
+  }
+});
+test('slots start only on the whole hour',()=>{
+  const teacher={...config.teachers[0],weekly:{1:[['09:30','12:00']]}};
+  assert.deepEqual(slotsForDay(teacher,PROGRAMS[0],'2030-06-03',NOW),['10:00','11:00']);
 });
 test('overlapping time slots and concurrent requests cannot double-book',async t=>{
-  const {service,calendar}=harness(t);const a=payload(),b={...payload(),time:'10:30'};
+  const {service,calendar}=harness(t);const a=payload(),b=payload();
   const result=await Promise.allSettled([service.book(a,NOW),service.book(b,NOW)]);
   assert.equal(result.filter(r=>r.status==='fulfilled').length,1);assert.equal(calendar.creates,5);assert.equal(result.find(r=>r.status==='rejected').reason.status,409);
 });
@@ -70,7 +79,7 @@ test('Google adapter rejects per-calendar errors and uses valid deterministic id
 test('Google adapter refreshes once and creates private events in the teacher primary calendar',async t=>{
   const calls=[],store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,5).toString('base64')});t.after(()=>store.close());store.saveGoogleToken('teacher-1','teacher@example.test','refresh-token');let refreshes=0;
   const c=new GoogleCalendar({store,oauth:{async refresh(token){assert.equal(token,'refresh-token');refreshes++;return {accessToken:'mock-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({id:'mock-event'}),{status:200});}});
-  const b={...validateBooking(payload(),config,NOW),id:'123',reference:'KTC-TEST'};await c.create(b,b.sessions[0]);await c.create(b,b.sessions[1]);assert.equal(refreshes,1);const resource=JSON.parse(calls[0].options.body);assert.match(calls[0].url,/calendars\/primary\/events/);assert.equal(resource.start.timeZone,'Asia/Manila');assert.equal(resource.visibility,'private');assert.equal(resource.transparency,'opaque');assert.equal(resource.attendees,undefined);assert.equal(Date.parse(resource.end.dateTime)-Date.parse(resource.start.dateTime),3600000);
+  const b={...validateBooking(payload(),config,NOW),id:'123',reference:'KTC-TEST'};await c.create(b,b.sessions[0]);await c.create(b,b.sessions[1]);assert.equal(refreshes,1);const resource=JSON.parse(calls[0].options.body);assert.match(calls[0].url,/calendars\/primary\/events/);assert.equal(resource.start.timeZone,'Asia/Manila');assert.equal(resource.visibility,'private');assert.equal(resource.transparency,'opaque');assert.equal(resource.attendees,undefined);assert.match(calls[0].url,/sendUpdates=none/);assert.equal(Date.parse(resource.end.dateTime)-Date.parse(resource.start.dateTime),3600000);
 });
 test('Google OAuth requests offline calendar consent and verifies the signed-in account',async()=>{
   const calls=[],oauth=new GoogleOAuth({clientId:'client-id',clientSecret:'client-secret',redirectUri:'https://kiean.example/api/google/callback',fetcher:async(url,options)=>{calls.push({url,options});return url.includes('/token')?new Response(JSON.stringify({access_token:'access',refresh_token:'refresh'}),{status:200}):new Response(JSON.stringify({email:'teacher@example.test',email_verified:true}),{status:200});}});
@@ -113,6 +122,7 @@ test('admin roster editor authenticates, persists updates and deactivates bookin
   const changedEmail=teachers.map(teacher=>({...teacher}));changedEmail[0].googleEmail='new@example.test';
   const rejected=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers:changedEmail})});assert.equal(rejected.status,409);
   const saved=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers})});assert.equal(saved.status,200);
+  for(let i=0;i<12;i++)assert.equal((await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers})})).status,200);
   const persisted=JSON.parse(readFileSync(configPath,'utf8'));assert.equal(adminConfig.teachers[0].available,false);assert.equal(persisted.teachers[0].available,false);assert.equal(persisted.teachers[0].googleConnected,undefined);
   assert.throws(()=>validateBooking(payload(),adminConfig,NOW),/available teacher/);
 });
@@ -123,4 +133,63 @@ test('live config allows http://localhost origin only outside production',t=>{
   write('http://localhost:3000');assert.equal(loadConfig().publicOrigin,'http://localhost:3000');
   write('http://kiean.example');assert.throws(()=>loadConfig(),/HTTPS/);
   process.env.NODE_ENV='production';write('http://localhost:3000');assert.throws(()=>loadConfig(),/HTTPS/);
+});
+const pdf=Buffer.from('%PDF-1.4 receipt').toString('base64'),png=Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1]).toString('base64');
+const weekdays=count=>{const out=[];for(let d='2030-06-03';out.length<count;d=addDays(d,1))if(![0,6].includes(new Date(d+'T00:00:00Z').getUTCDay()))out.push(d);return out;};
+function mailHarness(t){
+  const dir=mkdtempSync(join(tmpdir(),'kiean-uploads-')),store=new BookingStore(':memory:'),calendar=fakeCalendar(),sent=[];
+  t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+  return {dir,sent,service:new BookingService(config,store,calendar,{uploadsDir:dir,mailer:{async send(m){sent.push(m);}}})};
+}
+test('session rates use package prices, with San Pedro overrides',()=>{
+  assert.equal(sessionRate('online','online'),200);assert.equal(sessionRate('academic','natania'),150);assert.equal(sessionRate('sped','pila'),300);
+  assert.equal(sessionRate('academic','san-pedro'),250);assert.equal(sessionRate('sped','san-pedro'),400);assert.equal(sessionRate('after-school','san-pedro'),150);
+});
+test('online booking gets Meet links, a total and a paid teacher email with attachments',async t=>{
+  const {dir,sent,service}=mailHarness(t);
+  const b=await service.book({...payload(),attachments:[{kind:'request',name:'homework.png',type:'image/png',data:png},{kind:'receipt',name:'gcash.pdf',type:'application/pdf',data:pdf}]},NOW);
+  assert.equal(b.total,1000);assert.equal(b.paid,true);assert(b.sessions.every(s=>s.meetLink.startsWith('https://meet.google.com/')));
+  assert.equal(sent.length,1);assert.equal(sent[0].to,'teacher@example.test');assert.match(sent[0].subject,/PAID/);assert.match(sent[0].text,/₱1,000/);assert.match(sent[0].text,/meet\.google\.com/);assert.equal(sent[0].attachments.length,2);
+  assert.equal(readdirSync(join(dir,b.id)).length,2);
+});
+test('face-to-face booking emails the parent the full schedule and flags unpaid',async t=>{
+  const {sent,service}=mailHarness(t);
+  const b=await service.book({...payload(),program:'academic',branch:'san-pedro',dates:weekdays(20)},NOW);
+  assert.equal(b.total,5000);assert.equal(b.paid,false);assert(b.sessions.every(s=>!s.meetLink));
+  assert.deepEqual(sent.map(m=>m.to),['teacher@example.test','parent@example.test']);assert.match(sent[0].subject,/UNPAID/);
+  assert.equal(sent[1].text.match(/^\d+\. /gm).length,20);assert.match(sent[1].text,/San Pedro/);
+});
+test('a failed email does not undo a confirmed booking',async t=>{
+  const {service}=mailHarness(t);service.mailer={async send(){throw new Error('Gmail down');}};
+  const b=await service.book(payload(),NOW);assert.equal(b.sessions.length,5);
+});
+test('attachments are checked by type, signature, size and count',()=>{
+  assert.throws(()=>validateAttachments([{kind:'receipt',name:'r.pdf',type:'application/pdf',data:Buffer.from('MZ fake').toString('base64')}]),/does not match/);
+  assert.throws(()=>validateAttachments([{kind:'receipt',name:'r.exe',type:'application/x-msdownload',data:pdf}]),/JPG, PNG/);
+  assert.throws(()=>validateAttachments([{kind:'receipt',name:'r.pdf',type:'application/pdf',data:Buffer.concat([Buffer.from('%PDF-'),Buffer.alloc(5*1024*1024)]).toString('base64')}]),/5 MB/);
+  assert.throws(()=>validateAttachments(Array(4).fill({kind:'request',name:'a.png',type:'image/png',data:png})),/up to 3/);
+  assert.equal(validateAttachments([{kind:'request',name:'../../etc/passwd.png',type:'image/png',data:png}])[0].name.includes('/'),false);
+});
+test('email MIME carries the attachment and an encoded subject',()=>{
+  const raw=mime({to:'a@example.test',subject:'Bagong iskedyul ₱',text:'Hi',attachments:[{name:'r.pdf',type:'application/pdf',data:Buffer.from('%PDF-1')}]});
+  assert.match(raw,/^To: a@example\.test\r\nSubject: =\?UTF-8\?B\?/);assert.match(raw,/filename="r\.pdf"/);assert.match(raw,new RegExp(Buffer.from('%PDF-1').toString('base64')));
+});
+test('online invite comes from the center calendar with every date, both guests and one Meet link',async t=>{
+  const calls=[],store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,5).toString('base64')});t.after(()=>store.close());
+  store.saveGoogleToken('__center__','kieanadmin@example.test','center-refresh');
+  const c=new GoogleCalendar({store,oauth:{async refresh(token){assert.equal(token,'center-refresh');return {accessToken:'center-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({hangoutLink:'https://meet.google.com/x'}),{status:200});}});
+  const b={...validateBooking(payload(),config,NOW),id:'123',reference:'KTC-TEST',total:1000,rate:200,paid:false};
+  await c.createInvite(b);const r=JSON.parse(calls[0].options.body);
+  assert.equal(calls[0].options.headers.Authorization,'Bearer center-token');assert.match(calls[0].url,/sendUpdates=all&conferenceDataVersion=1/);
+  assert.deepEqual(r.attendees.map(a=>a.email),['parent@example.test','teacher@example.test']);assert.equal(r.conferenceData.createRequest.conferenceSolutionKey.type,'hangoutsMeet');
+  assert.equal(r.start.dateTime,'2030-06-03T10:00:00');assert.equal(r.end.dateTime,'2030-06-03T10:50:00');assert.equal(r.start.timeZone,'Asia/Manila');
+  assert.deepEqual(r.recurrence,['RDATE;TZID=Asia/Manila:20300604T100000,20300605T100000,20300606T100000,20300607T100000']);
+  assert.match(r.description,/<li>/);
+});
+test('email subjects start with the first session day and HTML escapes parent input',()=>{
+  const b={...validateBooking({...payload(),parentName:'<script>x</script>',notes:'<b>hi</b>'},config,NOW),id:'1',reference:'KTC-1',rate:200,total:1000,paid:true,sessions:payload().dates.map(date=>({date,meetLink:'https://meet.google.com/x'}))};
+  const teacher=teacherEmail(b,'teacher@example.test',[]),parent=parentScheduleEmail({...b,branch:'natania'});
+  assert.match(teacher.subject,/^Mon, Jun 3, 2030 · New schedule starts/);assert.match(parent.subject,/^Mon, Jun 3, 2030 · Your KieAn schedule starts/);
+  assert(!teacher.html.includes('<script>'));assert(teacher.html.includes('&lt;script&gt;'));assert(teacher.html.includes('cid:kiean-logo'));assert.match(teacher.html,/Join Meet/);
+  assert.match(mime(teacher),/Content-ID: <kiean-logo>/);
 });

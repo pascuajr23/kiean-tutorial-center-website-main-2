@@ -5,7 +5,8 @@ import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {loadConfig,publicConfig,validateTeacherRoster} from './lib/config.mjs';
 import {GoogleCalendar} from './lib/calendar.mjs';
-import {GoogleOAuth} from './lib/google-oauth.mjs';
+import {GoogleOAuth,CENTER_SCOPES} from './lib/google-oauth.mjs';
+import {GmailMailer,CENTER_ID} from './lib/mailer.mjs';
 import {BookingStore} from './lib/store.mjs';
 import {BookingService} from './lib/booking-service.mjs';
 import {BookingError} from './lib/domain.mjs';
@@ -45,7 +46,9 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         const ip=process.env.TRUST_PROXY==='1'?(req.headers['x-forwarded-for']?.split(',').at(-1)?.trim()||req.socket.remoteAddress):req.socket.remoteAddress;
         const now=Date.now();let bucket=rate.get(ip);if(!bucket||now-bucket.since>3600000){bucket={since:now,reads:0,writes:0};rate.set(ip,bucket);}
         const field=req.method==='POST'?'writes':'reads';bucket[field]++;
-        if(bucket[field]>(field==='writes'?10:600))throw new BookingError('Too many requests. Please wait before trying again.',429);
+        // Signed-in admins save rosters repeatedly; only anonymous traffic and failed sign-ins count toward the limit.
+        if(url.pathname==='/api/admin/teachers'&&hasAdminCredentials(req,adminCredentials))bucket[field]--;
+        else if(bucket[field]>(field==='writes'?10:600))throw new BookingError('Too many requests. Please wait before trying again.',429);
         if(url.pathname==='/api/admin/teachers'){
           if(config.preview)throw new BookingError('Teacher management is available only in live mode.',503);
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
@@ -84,7 +87,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           const finish=(message,status=200)=>{res.writeHead(status,{'Content-Type':'text/html; charset=utf-8','Set-Cookie':clearCookie,'Cache-Control':'no-store'});res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Google Calendar connection</title><body><main><h1>Google Calendar connection</h1><p>${message}</p></main></body></html>`);};
           if(!state||cookie!==state||!pending||pending.expires<Date.now()){finish('This connection link expired or could not be verified. Start again from the teacher connection link.',400);return;}
           if(url.searchParams.has('error')){finish('Google authorization was not completed. Start again if you want to connect this calendar.',400);return;}
-          const teacher=config.teachers.find(t=>t.id===pending.teacherId),code=url.searchParams.get('code');
+          const teacher=pending.teacherId===CENTER_ID?(config.centerEmail&&{id:CENTER_ID,googleEmail:config.centerEmail}):config.teachers.find(t=>t.id===pending.teacherId),code=url.searchParams.get('code');
           if(!teacher||!code){finish('Google did not return a valid authorization. Start again from the teacher connection link.',400);return;}
           try{
             const linked=await oauth.exchange(code,pending.codeVerifier);
@@ -92,19 +95,23 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
             if(!linked.refreshToken)throw new Error('Google did not issue offline access. Revoke the existing KieAn connection and try again.');
             store.saveGoogleToken(teacher.id,linked.email,linked.refreshToken);
             calendar?.clearToken(teacher.id);
-            finish('Google Calendar access is connected. You can close this page.');
+            finish(teacher.id===CENTER_ID?'Center Google account is connected. Booking emails and online invitations will come from this account. You can close this page.':'Google Calendar access is connected. You can close this page.');
           }catch(error){console.error('Google OAuth callback failed:',error.message);finish('The Google connection could not be completed. Check the server configuration and try again.',503);}
           return;
         }
-        const connect=url.pathname.match(/^\/api\/teachers\/([a-z0-9-]+)\/google\/connect$/);
-        if(req.method==='GET'&&connect){
+        const connect=url.pathname.match(/^\/api\/teachers\/([a-z0-9-]+)\/google\/connect$/),connectCenter=url.pathname==='/api/center/google/connect';
+        if(req.method==='GET'&&(connect||connectCenter)){
           if(config.preview||!oauth||!store)throw new BookingError('Google Calendar connection is available only in live mode.',503);
-          const teacher=config.teachers.find(t=>t.id===connect[1]);
+          if(connectCenter){
+            if(!hasAdminCredentials(req,adminCredentials)){challengeAdmin(res);return;}
+            if(!config.centerEmail)throw new BookingError('Set centerEmail in the configuration first.',503);
+          }
+          const teacher=connectCenter?{id:CENTER_ID}:config.teachers.find(t=>t.id===connect[1]);
           if(!teacher)throw new BookingError('Teacher not found.',404);
           for(const [key,value]of oauthStates)if(value.expires<Date.now())oauthStates.delete(key);
           if(oauthStates.size>=1000)throw new BookingError('Too many connection requests. Try again shortly.',429);
           const state=randomBytes(32).toString('base64url'),codeVerifier=randomBytes(32).toString('base64url');oauthStates.set(state,{teacherId:teacher.id,codeVerifier,expires:Date.now()+600000});
-          res.writeHead(302,{'Location':oauth.authorizationUrl(state,codeVerifier),'Set-Cookie':`kiean_oauth_state=${state}; Path=/api/google/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,'Cache-Control':'no-store'});res.end();return;
+          res.writeHead(302,{'Location':oauth.authorizationUrl(state,codeVerifier,connectCenter?CENTER_SCOPES:undefined),'Set-Cookie':`kiean_oauth_state=${state}; Path=/api/google/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,'Cache-Control':'no-store'});res.end();return;
         }
         if(req.method==='GET'&&url.pathname==='/api/availability'){
           if(config.preview)throw new BookingError('Live availability is not connected.',503);
@@ -114,7 +121,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           if(config.preview)throw new BookingError('Preview mode does not accept bookings or write to Google Calendar.',503);
           if(req.headers.origin!==config.publicOrigin)throw new BookingError('Booking requests must come from the KieAn website.',403);
           if(!req.headers['content-type']?.startsWith('application/json'))throw new BookingError('JSON is required.',415);
-          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>20000)throw new BookingError('Submission is too large.',413);chunks.push(chunk);}
+          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>21000000)throw new BookingError('Submission is too large. Attachments must total about 15 MB or less.',413);chunks.push(chunk);}
           let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid submission.');}
           json(200,await service.book(body));return;
         }
@@ -140,7 +147,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const store=config.preview?null:new BookingStore(resolve(process.env.KIEAN_DATA_DIR||'data','bookings.sqlite'),{tokenEncryptionKey:process.env.KIEAN_TOKEN_ENCRYPTION_KEY});
   const oauth=config.preview?null:new GoogleOAuth({clientId:process.env.GOOGLE_OAUTH_CLIENT_ID,clientSecret:process.env.GOOGLE_OAUTH_CLIENT_SECRET,redirectUri:`${config.publicOrigin}/api/google/callback`});
   const calendar=config.preview?null:new GoogleCalendar({store,oauth});
-  const service=config.preview?null:new BookingService(config,store,calendar);
+  const service=config.preview?null:new BookingService(config,store,calendar,{mailer:new GmailMailer({calendar}),uploadsDir:resolve(process.env.KIEAN_DATA_DIR||'data','uploads')});
   const server=createApp({config,service,store,oauth,calendar});
   server.listen(config.port,process.env.HOST||'127.0.0.1',()=>console.log(`KieAn website listening on http://${process.env.HOST||'127.0.0.1'}:${config.port} (${config.preview?'PREVIEW — no calendar writes':'LIVE'})`));
   const stop=()=>server.close(()=>{store?.close();process.exit(0);});process.on('SIGTERM',stop);process.on('SIGINT',stop);

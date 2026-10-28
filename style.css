@@ -1415,6 +1415,289 @@ img {
 
 
 /* =========================================================
+   VALUES, APPROACH & PROGRAM NOTES
+========================================================= */
+
+.value-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.value-list dt {
+    color: var(--blue);
+    font-weight: 900;
+    font-size: 14px;
+}
+
+.value-list dd,
+.approach-list {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.approach-list {
+    margin: 12px 0;
+    padding-left: 20px;
+}
+
+.program-card .program-note {
+    margin: -8px 0 0;
+    padding: 8px 12px;
+
+    border-radius: 8px;
+
+    background: var(--orange-light);
+    color: var(--orange-dark);
+
+    font-size: 12px;
+}
+
+
+/* =========================================================
+   TESTIMONIALS & PERMITS
+========================================================= */
+
+.permits {
+    background: var(--off-white);
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.gallery-item {
+    display: block;
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+
+    background: var(--white);
+    box-shadow: var(--shadow-sm);
+}
+
+.gallery-item img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.gallery-item:focus-visible {
+    outline: 3px solid var(--orange);
+    outline-offset: 3px;
+}
+
+.permit-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.permit-grid figure {
+    margin: 0;
+}
+
+.permit-grid figcaption {
+    margin-top: 10px;
+
+    color: var(--blue);
+    font-size: 13px;
+    font-weight: 800;
+    text-align: center;
+}
+
+
+/* =========================================================
+   POPUP (program details & photo galleries)
+========================================================= */
+
+.program-card .program-more {
+    display: none;
+}
+
+.program-open,
+.branch-photos {
+    align-self: flex-start;
+    margin-top: auto;
+    padding: 20px 0 0;
+
+    border: 0;
+    background: none;
+    color: var(--blue);
+
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+
+    cursor: pointer;
+}
+
+.branch-photos {
+    margin-top: 14px;
+    padding-top: 0;
+}
+
+.program-open:hover,
+.branch-photos:hover {
+    color: var(--orange-dark);
+}
+
+.program-open:focus-visible,
+.branch-photos:focus-visible,
+.popup button:focus-visible {
+    outline: 3px solid var(--orange);
+    outline-offset: 3px;
+}
+
+.popup {
+    width: min(760px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+
+    border: 0;
+    border-radius: var(--radius);
+
+    background: var(--white);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+
+.popup-gallery {
+    width: min(1000px, calc(100% - 32px));
+}
+
+.popup::backdrop {
+    background: rgba(6, 27, 70, 0.75);
+}
+
+.popup-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+
+    padding: 18px 22px;
+
+    border-bottom: 1px solid var(--border);
+    background: var(--white);
+}
+
+.popup-head h2 {
+    color: var(--blue);
+
+    font-family: "Nunito", sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.popup-close,
+.popup-nav button {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+
+    border: 1px solid var(--border);
+    border-radius: 50%;
+
+    background: var(--white);
+    color: var(--blue);
+
+    font-size: 24px;
+    line-height: 1;
+
+    cursor: pointer;
+}
+
+.popup-body {
+    padding: 22px;
+}
+
+.popup-body > p {
+    margin-bottom: 12px;
+
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.popup-body .program-tagline {
+    font-style: italic;
+    color: var(--blue);
+}
+
+.popup-body .program-rate {
+    font-size: 18px;
+}
+
+.popup-body .program-note {
+    padding: 8px 12px;
+
+    border-radius: 8px;
+
+    background: var(--orange-light);
+    color: var(--orange-dark);
+
+    font-size: 13px;
+}
+
+.popup-body .program-link {
+    margin-top: 16px;
+}
+
+.popup-gallery .popup-body {
+    padding: 12px;
+
+    text-align: center;
+}
+
+.popup-gallery .popup-body img {
+    display: block;
+    width: 100%;
+    max-height: calc(100dvh - 210px);
+    object-fit: contain;
+
+    border-radius: 10px;
+}
+
+.popup-gallery .popup-body .popup-caption {
+    margin: 10px 0 0;
+
+    color: var(--blue);
+    font-weight: 800;
+}
+
+.popup-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+
+    padding: 0 22px 18px;
+}
+
+.popup-nav[hidden] {
+    display: none;
+}
+
+.popup-count {
+    min-width: 60px;
+
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+}
+
+
+/* =========================================================
    INVESTMENT
 ========================================================= */
 

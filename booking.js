@@ -1,4 +1,4 @@
-import {PROGRAMS,BRANCHES,PREVIEW_TEACHERS,MIN_SESSIONS,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,clock,minutes,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
+import {PROGRAMS,BRANCHES,PREVIEW_TEACHERS,sessionRate,peso,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,clock,minutes,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
 const $=id=>document.getElementById(id);
 const q=new URLSearchParams(location.search);
 const today=manilaDay();
@@ -16,7 +16,7 @@ async function api(path,options={}) {
   return data;
 }
 async function init(){
-  try{const config=await api('/api/config');state.preview=config.preview;state.teachers=config.teachers;}
+  try{const config=await api('/api/config');state.preview=config.preview;state.teachers=config.teachers;state.paymentInstructions=config.paymentInstructions;}
   catch{state.preview=true;state.teachers=PREVIEW_TEACHERS;}
   $('connection-status').textContent=state.preview?'Preview mode — sample teacher and availability. No booking is saved and Google Calendar is not updated.':'Choose a teacher’s available dates. Confirmed sessions are added to the teacher’s Google Calendar.';
   $('connection-status').classList.toggle('live',!state.preview);
@@ -47,9 +47,9 @@ function renderTeachers(){
 }
 function updateSummary(){
   const p=getProgram();$('summary-program').textContent=p.name;$('summary-teacher').textContent=getTeacher()?.name||'Choose a teacher';$('summary-time').textContent=state.time?slotLabel(state.time,p.slotMinutes):'Choose a time slot';$('summary-location-row').hidden=state.mode!=='branch';$('summary-location').textContent=BRANCHES.find(b=>b.id===state.branch)?.name||'';
-  $('session-count').textContent=`${state.dates.length} session${state.dates.length===1?'':'s'}`;$('minimum-status').textContent=state.dates.length>=MIN_SESSIONS?'Minimum met ✓':'Minimum 5';$('session-progress').value=Math.min(MIN_SESSIONS,state.dates.length);$('session-hint').textContent=state.dates.length>=MIN_SESSIONS?'One teacher and one shared time for every date.':`Select ${MIN_SESSIONS-state.dates.length} more date${MIN_SESSIONS-state.dates.length===1?'':'s'} to reach the minimum.`;
+  $('session-count').textContent=`${state.dates.length} session${state.dates.length===1?'':'s'}`;$('minimum-status').textContent=state.dates.length>=getProgram().minSessions?'Minimum met ✓':`Minimum ${getProgram().minSessions}`;$('session-progress').max=getProgram().minSessions;$('session-progress').value=Math.min(getProgram().minSessions,state.dates.length);$('session-hint').textContent=state.dates.length>=getProgram().minSessions?'One teacher and one shared time for every date.':`Select ${getProgram().minSessions-state.dates.length} more date${getProgram().minSessions-state.dates.length===1?'':'s'} to reach the minimum.`;
   $('duration-note').textContent=p.id==='online'?'50 minutes of focused learning, plus 10 minutes between lessons.':'Each lesson lasts 60 minutes. All selected dates use the same time slot.';
-  $('to-details').disabled=state.busy||state.dates.length<MIN_SESSIONS||!state.time||!state.common.includes(state.time);
+  $('to-details').disabled=state.busy||state.dates.length<getProgram().minSessions||!state.time||!state.common.includes(state.time);
 }
 function go(step){
   if(state.locked)return;clearError();state.step=step;
@@ -105,17 +105,30 @@ async function addWeek(){
 }
 function renderReview(){
   $('review-sessions').replaceChildren(...sessionRows(state.dates.map(date=>({date})),state.time));
-  $('fee-note').textContent=getProgram().price+'. The five-session booking minimum is a scheduling rule. Published package prices are not automatically prorated; KieAn will confirm the applicable fee. No payment is collected here.';
+  const rate=sessionRate(state.program,bookingBranch());
+  $('total-price').textContent=peso(rate*state.dates.length);
+  $('price-breakdown').textContent=`${state.dates.length} sessions × ${peso(rate)} per session`;
+  $('payment-instructions').textContent=state.paymentInstructions||'Pay at the branch or contact the center. Upload your receipt if you have already paid.';
+  $('fee-note').textContent=getProgram().price+'. '+(getProgram().mode==='online'?'Online bookings need at least 5 sessions.':'Face-to-face bookings need at least 20 sessions.')+' The total uses the per-session package rate.';
 }
-function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getProgram().slotMinutes)));return row;});}
+function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getProgram().slotMinutes)));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
+const bookingBranch=()=>state.mode==='online'?'online':state.branch;
+async function readAttachments(){
+  const request=[...$('request-files').files],receipt=[...$('receipt-file').files];
+  if(request.length>MAX_REQUEST_FILES)throw new Error(`Attach up to ${MAX_REQUEST_FILES} files.`);
+  const all=[...request.map(file=>({file,kind:'request'})),...receipt.map(file=>({file,kind:'receipt'}))];
+  for(const {file} of all){if(!ATTACHMENT_TYPES.includes(file.type))throw new Error(`${file.name} must be a JPG, PNG, WebP or PDF file.`);if(file.size>MAX_ATTACHMENT_BYTES)throw new Error(`${file.name} is larger than 5 MB.`);}
+  return Promise.all(all.map(({file,kind})=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({kind,name:file.name,type:file.type,data:reader.result.split(',')[1]});reader.onerror=()=>reject(new Error(`${file.name} could not be read.`));reader.readAsDataURL(file);})));
+}
 function lockForm(lock){state.locked=lock;document.querySelectorAll('#booking-form input,#booking-form select,#booking-form textarea,#booking-form button').forEach(el=>el.disabled=lock);}
 $('booking-form').addEventListener('input',()=>{if(!state.locked)state.requestId=crypto.randomUUID();});
 $('booking-form').addEventListener('submit',async event=>{
-  event.preventDefault();if(state.locked)return;clearError();if(state.dates.length<MIN_SESSIONS||!state.time){showError('Select at least five dates and one shared time.');return;}
-  const fields=Object.fromEntries(new FormData(event.target));const payload={...fields,consent:fields.consent==='on',teacher:state.teacher,program:state.program,branch:state.mode==='online'?'online':state.branch,dates:state.dates,time:state.time,requestId:state.requestId};lockForm(true);$('submit-booking').textContent=state.preview?'Preparing preview…':'Checking dates and updating calendar…';
+  event.preventDefault();if(state.locked)return;clearError();if(state.dates.length<getProgram().minSessions||!state.time){showError(`Select at least ${getProgram().minSessions} dates and one shared time.`);return;}
+  let attachments;try{attachments=await readAttachments();}catch(error){showError(error.message);return;}
+  const fields=Object.fromEntries(new FormData(event.target));const payload={...fields,consent:fields.consent==='on',teacher:state.teacher,program:state.program,branch:bookingBranch(),dates:state.dates,time:state.time,requestId:state.requestId,attachments};lockForm(true);$('submit-booking').textContent=state.preview?'Preparing preview…':'Checking dates and updating calendar…';
   try{
     let result;
-    if(state.preview){const p=getProgram();result={id:state.requestId,reference:'PREVIEW ONLY',preview:true,programName:p.name,lessonMinutes:p.lessonMinutes,teacherName:getTeacher().name,time:state.time,sessions:state.dates.map(date=>({date,start:instant(date,state.time).toISOString(),end:instant(date,clock(minutes(state.time)+p.slotMinutes)).toISOString()}))};}
+    if(state.preview){const p=getProgram();const rate=sessionRate(p.id,bookingBranch());result={id:state.requestId,reference:'PREVIEW ONLY',preview:true,online:p.mode==='online',rate,total:rate*state.dates.length,paid:attachments.some(a=>a.kind==='receipt'),programName:p.name,lessonMinutes:p.lessonMinutes,teacherName:getTeacher().name,time:state.time,sessions:state.dates.map(date=>({date,start:instant(date,state.time).toISOString(),end:instant(date,clock(minutes(state.time)+p.slotMinutes)).toISOString()}))};}
     else result=await api('/api/bookings',{method:'POST',body:JSON.stringify(payload)});
     state.confirmation=result;showConfirmation(result);
   }catch(error){
@@ -126,7 +139,7 @@ $('booking-form').addEventListener('submit',async event=>{
 function showConfirmation(b){
   for(let i=1;i<=3;i++)$('step-'+i).hidden=true;
   document.querySelectorAll('.booking-steps li').forEach(li=>{li.classList.add('done');li.removeAttribute('aria-current');});
-  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'));
+  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'),node('p',`Total: ${peso(b.total)} · ${b.paid?'Receipt received — the center will verify your payment.':'Not yet paid.'}`,'confirmation-total'),...(b.preview?[]:[node('p',b.online?'A Google Calendar invitation from KieAn, with one Google Meet link for every session, was sent to your email.':'Your full schedule has been sent to your email.')]));
   const review=node('div',undefined,'review-box');review.append(node('h3',b.teacherName),...sessionRows(b.sessions,b.time));panel.append(review);
   const actions=node('div',undefined,'panel-actions');const download=node('button',b.preview?'Download preview calendar':'Download my calendar','btn btn-orange');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([icsForBooking(b)],{type:'text/calendar;charset=utf-8'}));const a=node('a');a.href=url;a.download=b.preview?'kiean-preview.ics':`kiean-${b.reference}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);});const again=node('a','Start a new booking','btn btn-outline');again.href='booking.html';actions.append(download,again);panel.append(actions,node('p',b.preview?'Live booking opens after the center connects its teachers and calendars.':'Save this reference. Contact the center for lesson access details, fees or changes to these sessions.'));panel.hidden=false;panel.focus();
 }

@@ -22,7 +22,7 @@ Do not open `booking.html` by double-clicking it: its JavaScript modules need an
 
 ## Booking behavior
 
-- Every submitted booking must contain **5–40 unique dates**, within the next 180 days.
+- Online bookings must contain **5–40 unique dates**; face-to-face bookings (Academic, After School, SPED/SNED) must contain **20–40**. All dates fall within the next 180 days.
 - One teacher, one program, one branch or online format, and one start time apply to the entire booking.
 - Time labels, teacher working hours and date boundaries use **Asia/Manila (UTC+8)** regardless of the visitor’s device timezone.
 - The portfolio specifies **50-minute online lessons**. This implementation reserves **60 minutes** in the teacher’s calendar: 50 minutes of instruction and 10 minutes between lessons, matching the requested example of 10–11 AM. This buffer is an implementation choice, not an additional fact from the PDF.
@@ -31,7 +31,10 @@ Do not open `booking.html` by double-clicking it: its JavaScript modules need an
 - Available time options are the intersection of availability across **every** chosen date. The server checks all dates again at submission.
 - The teacher’s calendar receives **one private, busy event for each selected date**. Events include the parent’s contact details and the learning request, for the assigned teacher’s use.
 - The site confirms only when every calendar event is successfully created. Retrying the same request does not create duplicate events.
-- Parents receive an on-screen reference and a downloadable calendar file. Automatic parent email invitations and Google Meet creation are **not configured**. The center supplies lesson access details and fees.
+- Step 3 shows the total price (sessions × per-session rate: Online ₱200; Academic/After School ₱150; SPED ₱300; San Pedro Academic ₱250 and SPED ₱400). Parents can attach up to 3 homework files and one payment receipt (JPG, PNG, WebP or PDF, 5 MB each). Files are checked by type and signature and saved in `KIEAN_DATA_DIR/uploads/<booking id>/`. Payment instructions come from `paymentInstructions` in `config.json`.
+- Online bookings create **one** invitation on the center Google Calendar (`centerEmail`) covering every session date, with one Google Meet link. The parent and the teacher are guests, so both can join Meet without being admitted. The teacher also keeps a private busy event per session with the Meet link. Face-to-face parents get one branded email with the full schedule.
+- Email subjects start with the first session day, for example `Mon, Nov 2, 2026 · New schedule starts · …`. Emails use the website's colours and logo, with a plain-text fallback.
+- The assigned teacher gets an email for every new booking with the schedule, total, uploaded files, and **PAID** (receipt uploaded) or **UNPAID**. Emails are sent from the center Gmail (`centerEmail` in `config.json`). If an email fails, the booking still stands and the error is logged.
 
 Academic and After School programs remain described as 2 learners to 1 teacher, following the PDF. This initial scheduler reserves the whole teacher slot for one booking; staff may arrange the paired learner. It does not automatically combine unrelated parent bookings or manage group capacity. Nursery, Toddler, Summer, Kiddie Care and the field trip have inquiry links because their cohort schedules and capacity were not provided.
 
@@ -64,7 +67,7 @@ For the supplied systemd unit, put the OAuth client ID, client secret, one gener
 
 To test the Google sign-in locally before deploying, set `publicOrigin` to `http://localhost:3000`, add `http://localhost:3000/api/google/callback` as an authorized redirect URI, leave `NODE_ENV` unset, and browse via `http://localhost:3000` (not `127.0.0.1`). Use Chrome or Firefox; Safari rejects the `Secure` state cookie over plain HTTP. Production still requires HTTPS.
 
-The integration does not add attendees, so it does not send automatic parent invitations. Each teacher can revoke KieAn access from their Google Account security settings; they will need to reconnect before bookings can resume.
+**Center Google account (emails and online invitations):** enable the **Gmail API** in the Cloud project, add the scope `https://www.googleapis.com/auth/gmail.send` under Google Auth Platform → Data Access, set `centerEmail` in `config.json`, restart, then open `/admin` and click **Connect center Google account (emails & invites)** while signed in to that Google account. Each teacher can revoke KieAn access from their Google Account security settings; they will need to reconnect before bookings can resume.
 
 If replacing an already-live service-account setup, this change does not migrate old events or pending requests. Back up the database, resolve pending requests, and move or recreate existing schedule events on each teacher’s primary calendar before switching traffic; otherwise the new availability check will not see events left on the old shared calendars.
 
@@ -85,7 +88,7 @@ Each teacher needs a unique `id` and unique `googleEmail`. A single teacher shou
 | `blackoutDates` | Closed dates such as `["2026-12-25", "2027-01-01"]` |
 | `leadMinutes` | Minimum advance notice, at least 60 minutes |
 
-Working periods generate start times every 30 minutes and require the full hour to fit before closing. Lunch breaks, holidays and approved operating hours must be supplied by the center. The PDF does not establish 9 AM–5 PM or 10 PM as current operating hours; those unsupported claims were removed from the public site. Hours in the sample configuration are examples only.
+Working periods generate start times on the whole hour only (for example 10:00, 11:00) and require the full hour to fit before closing. A period starting at 09:30 offers its first slot at 10:00. Lunch breaks, holidays and approved operating hours must be supplied by the center. The PDF does not establish 9 AM–5 PM or 10 PM as current operating hours; those unsupported claims were removed from the public site. Hours in the sample configuration are examples only.
 
 Teacher roster changes saved from `/admin` apply immediately. Restart the server after manual configuration edits. Existing confirmed bookings are not moved automatically if a teacher’s working hours or calendar assignment changes. Keep existing teacher IDs and calendar assignments stable where possible.
 
