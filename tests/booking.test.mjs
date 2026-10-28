@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BookingStore} from '../lib/store.mjs';
@@ -9,6 +9,7 @@ import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking} from '../lib/domain.mjs';
+import {loadConfig} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
@@ -114,4 +115,12 @@ test('admin roster editor authenticates, persists updates and deactivates bookin
   const saved=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers})});assert.equal(saved.status,200);
   const persisted=JSON.parse(readFileSync(configPath,'utf8'));assert.equal(adminConfig.teachers[0].available,false);assert.equal(persisted.teachers[0].available,false);assert.equal(persisted.teachers[0].googleConnected,undefined);
   assert.throws(()=>validateBooking(payload(),adminConfig,NOW),/available teacher/);
+});
+test('live config allows http://localhost origin only outside production',t=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-config-')),file=join(dir,'config.json'),saved={...process.env};t.after(()=>{process.env=saved;rmSync(dir,{recursive:true,force:true});});
+  const write=publicOrigin=>writeFileSync(file,JSON.stringify({mode:'live',publicOrigin,teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',googleEmail:'teacher@example.test'}]}));
+  Object.assign(process.env,{KIEAN_CONFIG:file,GOOGLE_OAUTH_CLIENT_ID:'id',GOOGLE_OAUTH_CLIENT_SECRET:'secret',KIEAN_TOKEN_ENCRYPTION_KEY:Buffer.alloc(32).toString('base64'),NODE_ENV:'development'});
+  write('http://localhost:3000');assert.equal(loadConfig().publicOrigin,'http://localhost:3000');
+  write('http://kiean.example');assert.throws(()=>loadConfig(),/HTTPS/);
+  process.env.NODE_ENV='production';write('http://localhost:3000');assert.throws(()=>loadConfig(),/HTTPS/);
 });
