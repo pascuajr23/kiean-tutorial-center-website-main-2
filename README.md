@@ -181,23 +181,48 @@ In the Google client, the **Authorized redirect URI** must be exactly `https://k
 
 `NODE_ENV`, `PORT`, `KIEAN_CONFIG` and `KIEAN_DATA_DIR` are already set inside the image. Do not add them.
 
-**4. Add the site settings in `config/config.json`.** Copy your working local file from your computer:
+**4. Add the site settings in `config/config.json`.** This must be the **whole** file: one JSON object from the opening `{` to the closing `}`, with every teacher. Do not paste only a few lines. The easiest way is to copy your working local `config.json` and change `publicOrigin`. On your computer, in the project folder:
 
 ```sh
-# on your computer, in the project folder
-scp config.json YOUR_VPS_USER@YOUR_VPS:/opt/kiean/config/config.json
+mkdir -p config && node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('config.json','utf8'));c.publicOrigin='https://kieantutorial.com';fs.writeFileSync('config/config.json',JSON.stringify(c,null,2)+'\\n')"
+scp config/config.json YOUR_VPS_USER@YOUR_VPS:/tmp/kiean-config.json
 ```
 
-Then on the VPS, open `nano /opt/kiean/config/config.json` and check these values:
+On the VPS:
+
+```sh
+sudo mv /tmp/kiean-config.json /opt/kiean/config/config.json
+sudo python3 -m json.tool /opt/kiean/config/config.json > /dev/null && echo "valid JSON"
+```
+
+The file has this shape (shortened here to one teacher):
 
 ```json
-"mode": "live",
-"publicOrigin": "https://kieantutorial.com",
-"centerEmail": "kieanadmin@gmail.com",
-"paymentInstructions": "GCash: 09XX XXX XXXX (Account Name) ...",
+{
+  "mode": "live",
+  "publicOrigin": "https://kieantutorial.com",
+  "leadMinutes": 60,
+  "centerEmail": "kieanadmin@gmail.com",
+  "paymentInstructions": "GCash: 09XX XXX XXXX (Account Name). Upload your receipt below once paid.",
+  "teachers": [
+    {
+      "id": "teacher-1",
+      "name": "Teacher name",
+      "bio": "Short introduction",
+      "googleEmail": "teacher@gmail.com",
+      "available": true,
+      "programs": ["online", "academic"],
+      "branches": ["online", "natania"],
+      "weekly": {
+        "1": [["09:00", "12:00", "online"], ["13:00", "17:00", "f2f"]]
+      },
+      "blackoutDates": []
+    }
+  ]
+}
 ```
 
-Each teacher's `googleEmail` must be the Google account they will connect. Remove local test teachers you do not want on the live site.
+Each teacher's `googleEmail` must be the Google account they will connect. You can edit teachers and hours later from `/admin`.
 
 **5. Lock down permissions.** The container runs as uid 1000. It must own `config/` (the `/admin` page saves the roster there) and `data/` (database and uploaded receipts):
 
