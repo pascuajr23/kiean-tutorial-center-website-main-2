@@ -1,13 +1,19 @@
 export const TIME_ZONE = 'Asia/Manila';
-export const MIN_SESSIONS = 5;
 export const MAX_SESSIONS = 40;
 export const HORIZON_DAYS = 180;
 export const PROGRAMS = [
-  { id: 'online', name: 'Online Tutorial', mode: 'online', lessonMinutes: 50, slotMinutes: 60, price: 'Fees confirmed by the center', note: 'Nursery to Grade 6 · One-to-one' },
-  { id: 'academic', name: 'Academic Tutorial', mode: 'branch', lessonMinutes: 60, slotMinutes: 60, price: '₱3,000 / 20 sessions', note: 'Nursery to Grade 6 · 2 learners : 1 teacher' },
-  { id: 'after-school', name: 'After School Tutorial', mode: 'branch', lessonMinutes: 60, slotMinutes: 60, price: '₱3,000 / 20 sessions', note: 'Nursery to Grade 6 · 2 learners : 1 teacher' },
-  { id: 'sped', name: 'SPED / SNED Tutorial', mode: 'branch', lessonMinutes: 60, slotMinutes: 60, price: '₱6,000 / 20 sessions · ₱3,900 / 12 sessions', note: 'Nursery to Grade 6 · One-to-one' }
+  { id: 'online', name: 'Online Tutorial', mode: 'online', minSessions: 5, rate: 200, lessonMinutes: 50, slotMinutes: 60, price: 'Fees confirmed by the center', note: 'Nursery to Grade 6 · One-to-one' },
+  { id: 'academic', name: 'Academic Tutorial', mode: 'branch', minSessions: 20, rate: 150, lessonMinutes: 60, slotMinutes: 60, price: '₱3,000 / 20 sessions', note: 'Nursery to Grade 6 · 2 learners : 1 teacher' },
+  { id: 'after-school', name: 'After School Tutorial', mode: 'branch', minSessions: 20, rate: 150, lessonMinutes: 60, slotMinutes: 60, price: '₱3,000 / 20 sessions', note: 'Nursery to Grade 6 · 2 learners : 1 teacher' },
+  { id: 'sped', name: 'SPED / SNED Tutorial', mode: 'branch', minSessions: 20, rate: 300, lessonMinutes: 60, slotMinutes: 60, price: '₱6,000 / 20 sessions · ₱3,900 / 12 sessions', note: 'Nursery to Grade 6 · One-to-one' }
 ];
+// Per-session rates: package price ÷ 20 sessions (portfolio pp. 6–8); San Pedro has its own rates (p. 32).
+const BRANCH_RATES = {'san-pedro': {academic: 250, sped: 400}};
+export const sessionRate = (programId, branch) => BRANCH_RATES[branch]?.[programId] ?? PROGRAMS.find(p => p.id === programId).rate;
+export const peso = amount => '₱' + amount.toLocaleString('en-PH');
+export const ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const MAX_REQUEST_FILES = 3;
 export const BRANCHES = [
   {id:'san-pedro',name:'San Pedro, Laguna'}, {id:'pila',name:'Pila, Laguna'},
   {id:'natania',name:'Natania Homes'}, {id:'south-square',name:'South Square'},
@@ -34,7 +40,7 @@ export function slotsForDay(teacher,program,day,now=new Date(),leadMinutes=60) {
   if (program.mode === 'branch' && [0,6].includes(weekday(day))) return [];
   const slots=[];
   for(const [start,end] of teacher.weekly[weekday(day)] || []) {
-    for(let n=minutes(start);n+program.slotMinutes<=minutes(end);n+=30) {
+    for(let n=Math.ceil(minutes(start)/60)*60;n+program.slotMinutes<=minutes(end);n+=60) {
       const t=clock(n);
       if(instant(day,t).getTime() >= now.getTime()+leadMinutes*60000) slots.push(t);
     }

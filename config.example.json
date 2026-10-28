@@ -2,6 +2,8 @@
   "mode": "preview",
   "publicOrigin": "https://YOUR-WEBSITE-DOMAIN",
   "leadMinutes": 60,
+  "centerEmail": "center-gmail@example.com",
+  "paymentInstructions": "REPLACE with GCash / bank details shown to parents above the receipt upload",
   "teachers": [
     {
       "id": "teacher-1",
