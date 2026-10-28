@@ -113,6 +113,22 @@ function renderReview(){
 }
 function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getProgram().slotMinutes)));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
 const bookingBranch=()=>state.mode==='online'?'online':state.branch;
+// Check files as soon as they are chosen: drop unusable ones and say why next to the field, so the parent can pick again.
+function keepValidFiles(input,limit){
+  const files=[...input.files],problems=[];
+  const valid=files.filter(f=>{
+    if(!ATTACHMENT_TYPES.includes(f.type)){problems.push(`${f.name} is not a JPG, PNG, WebP or PDF file.`);return false;}
+    if(f.size>MAX_ATTACHMENT_BYTES){problems.push(`${f.name} is too big (${(f.size/1048576).toFixed(1)} MB). Please choose a file of 5 MB or less.`);return false;}
+    return true;
+  });
+  if(valid.length>limit)problems.push(`Only the first ${limit} file${limit===1?'':'s'} were kept.`);
+  let note=input.parentElement.querySelector('.file-error');
+  if(!note){note=node('small',undefined,'file-error');note.setAttribute('role','alert');input.after(note);}
+  note.textContent=problems.join(' ');note.hidden=!problems.length;
+  if(problems.length){const kept=new DataTransfer();valid.slice(0,limit).forEach(f=>kept.items.add(f));input.files=kept.files;}
+}
+$('request-files').addEventListener('change',e=>keepValidFiles(e.target,MAX_REQUEST_FILES));
+$('receipt-file').addEventListener('change',e=>keepValidFiles(e.target,1));
 async function readAttachments(){
   const request=[...$('request-files').files],receipt=[...$('receipt-file').files];
   if(request.length>MAX_REQUEST_FILES)throw new Error(`Attach up to ${MAX_REQUEST_FILES} files.`);
