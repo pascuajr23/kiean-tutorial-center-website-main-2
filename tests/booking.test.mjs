@@ -12,7 +12,7 @@ import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
-import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay,sessionRate,addDays} from '../shared.mjs';
+import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true});
@@ -118,6 +118,7 @@ test('admin roster editor authenticates, persists updates and deactivates bookin
   const base='http://127.0.0.1:'+app.address().port,authorization='Basic '+Buffer.from('center-admin:private-password').toString('base64');
   assert.equal((await fetch(base+'/admin')).status,401);assert.equal((await fetch(base+'/api/admin/teachers')).status,401);
   const loaded=await fetch(base+'/api/admin/teachers',{headers:{Authorization:authorization}});assert.equal(loaded.status,200);
+  assert.deepEqual((await loaded.clone().json()).center,{email:null,connected:false});
   const teachers=(await loaded.json()).teachers;teachers[0].available=false;
   const changedEmail=teachers.map(teacher=>({...teacher}));changedEmail[0].googleEmail='new@example.test';
   const rejected=await fetch(base+'/api/admin/teachers',{method:'POST',headers:{Authorization:authorization,Origin:config.publicOrigin,'Content-Type':'application/json'},body:JSON.stringify({teachers:changedEmail})});assert.equal(rejected.status,409);
@@ -209,4 +210,29 @@ test('roster validation accepts known period types only',()=>{
   const base={...config.teachers[0]};
   assert.doesNotThrow(()=>validateTeacherRoster([{...base,weekly:{1:[['09:00','12:00','online'],['13:00','15:00','sped']]}}]));
   assert.throws(()=>validateTeacherRoster([{...base,weekly:{1:[['09:00','12:00','vip']]}}]),/working hours/);
+});
+test('static files get cache headers; pages and API stay uncached',async t=>{
+  const app=createApp({config});await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port,cc=async path=>(await fetch(base+path)).headers.get('cache-control');
+  assert.equal(await cc('/assets/kiean-logo.webp'),'public, max-age=604800');
+  assert.equal(await cc('/style.css?v=1'),'public, max-age=31536000, immutable');
+  assert.equal(await cc('/style.css'),'no-cache');
+  assert.equal(await cc('/index.html'),'no-store');
+  assert.equal(await cc('/api/config'),'no-store');
+});
+test('pages use clean URLs and old .html addresses redirect',async t=>{
+  const app=createApp({config});await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port,get=path=>fetch(base+path,{redirect:'manual'});
+  assert.equal((await get('/booking')).status,200);assert.match(await (await get('/booking')).text(),/booking-page/);
+  assert.equal((await get('/')).status,200);
+  const old=await get('/booking.html?mode=branch&program=sped');assert.equal(old.status,301);assert.equal(old.headers.get('location'),'/booking?mode=branch&program=sped');
+  assert.equal((await get('/index.html')).headers.get('location'),'/');
+  assert.equal((await get('/config.json')).status,404);
+});
+test('admin schedule summary groups days with the same hours',()=>{
+  const weekdays={1:[['09:00','12:00','online'],['13:00','17:00']],2:[['09:00','12:00','online'],['13:00','17:00']],3:[['09:00','12:00','online'],['13:00','17:00']],4:[['09:00','12:00','online'],['13:00','17:00']],5:[['09:00','12:00','online'],['13:00','17:00']]};
+  assert.deepEqual(scheduleSummary(weekdays),{lines:['Mon–Fri · 9 AM–12 PM Online, 1 PM–5 PM'],hours:35});
+  const pattern={1:[['09:00','10:00','sped']],3:[['09:00','10:00','sped']],5:[['09:00','10:00','sped']],2:[['14:00','15:00','f2f']],4:[['14:00','15:00','f2f']]};
+  assert.deepEqual(scheduleSummary(pattern).lines,['Mon, Wed, Fri · 9 AM–10 AM SPED','Tue, Thu · 2 PM–3 PM F2F']);
+  assert.deepEqual(scheduleSummary({}),{lines:[],hours:0});
 });

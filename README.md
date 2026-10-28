@@ -14,7 +14,7 @@ On Windows, extract the ZIP and run `START-PREVIEW.cmd`. Alternatively, open a t
 npm start
 ```
 
-Open **http://127.0.0.1:3000**. The booking page is **http://127.0.0.1:3000/booking.html**.
+Open **http://127.0.0.1:3000**. The booking page is **http://127.0.0.1:3000/booking** (old `.html` addresses redirect there).
 
 Example: choose Online Tutorial → Sample teacher → Add Mon–Fri → 10:00 AM–11:00 AM → Continue to details. You can preview the confirmation and download an `.ics` calendar file. The downloaded preview is explicitly labeled as a preview.
 
@@ -115,7 +115,7 @@ GitHub Actions runs the tests and builds the Docker image on pushes and pull req
 
 GitHub Actions builds and publishes an image on every push: `ghcr.io/pascuajr23/kiean-tutorial-center-website-main-2:main` for `main`, a tag named after any other branch (for example `:development`), and an immutable `sha-…` tag per commit. The image runs as an unprivileged user, holds no secrets, and has a health check. `deploy/compose.yaml` runs the `:main` image on `127.0.0.1:3001` only. The host's Caddy (not a container) serves HTTPS and proxies to it; see `deploy/Caddyfile.example`.
 
-**1. DNS and Caddy.** Point `kieantutorial.com`, `www.kieantutorial.com` and `proxy.kieantutorial.com` to the VPS. Open only ports 80 and 443. In `/etc/caddy/Caddyfile`, proxy the main site to `127.0.0.1:3001` and add `request_body { max_size 25MB }` so booking attachments fit (see `deploy/Caddyfile.example`), then `sudo systemctl reload caddy`.
+**1. DNS and Caddy.** Point `kieantutorial.com`, `www.kieantutorial.com` and `proxy.kieantutorial.com` to the VPS. Open only ports 80 and 443. In `/etc/caddy/Caddyfile`, proxy the main site to `127.0.0.1:3001` and add `encode zstd gzip` (compresses pages, CSS and JS) and `request_body { max_size 25MB }` so booking attachments fit (see `deploy/Caddyfile.example`), then `sudo systemctl reload caddy`.
 
 **2. Create the folder and `compose.yaml`.** Run these on the VPS:
 
@@ -323,4 +323,4 @@ Online tuition is not quoted in the portfolio, so the website asks the center to
 
 Run `npm test` for booking and integration tests using a simulated Calendar service. They cover the five-session rule, Philippine Time, same-slot dates, calendar conflicts, overlapping concurrent bookings, duplicate retries, calendar outages, rollback, durable holds, calendar export and protected server files. No live Google Calendar changes are made by the tests. Live Google credentials were unavailable during development; complete the live validation in the connection steps above before opening public bookings.
 
-The delivered version passed 17 automated tests, desktop and mobile browser checks, and a complete browser-to-server booking flow with a simulated Calendar service. The browser checks covered the four-session restriction, five- and ten-session selection, parent details, confirmation, calendar download, blocked overlapping times and responsive layout. Preview screenshots are included in `docs/booking-desktop.png` and `docs/booking-mobile.png`.
+The delivered version passes its automated tests (`npm test`), desktop and mobile browser checks, and a complete browser-to-server booking flow with a simulated Calendar service. The browser checks covered the four-session restriction, five- and ten-session selection, parent details, confirmation, calendar download, blocked overlapping times and responsive layout. Preview screenshots are included in `docs/booking-desktop.png` and `docs/booking-mobile.png`.

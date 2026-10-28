@@ -1,4 +1,4 @@
-export const TIME_ZONE = 'Asia/Manila';
+const TIME_ZONE = 'Asia/Manila';
 export const MAX_SESSIONS = 40;
 export const HORIZON_DAYS = 180;
 export const PROGRAMS = [
@@ -21,7 +21,7 @@ export const PERIOD_TYPES = [
   {id: 'f2f', label: 'Face to face only'},
   {id: 'sped', label: 'SPED face to face only'}
 ];
-export function periodAllows(type = 'any', program) {
+function periodAllows(type = 'any', program) {
   return type === 'any' || (type === 'online' && program.mode === 'online') || (type === 'f2f' && program.mode === 'branch') || (type === 'sped' && program.id === 'sped');
 }
 export const BRANCHES = [
@@ -67,4 +67,19 @@ export function icsForBooking(booking) {
   lines.push('END:VCALENDAR');
   // RFC 5545: fold at 75 UTF-8 octets, never splitting a code point.
   return lines.map(line=>{let out='',len=0;for(const ch of line){const size=new TextEncoder().encode(ch).length;if(len+size>75){out+='\r\n ';len=1;}out+=ch;len+=size;}return out;}).join('\r\n')+'\r\n';
+}
+const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],TYPE_SHORT={online:'Online',f2f:'F2F',sped:'SPED'};
+const shortTime=time=>timeLabel(time).replace(':00','');
+// Group days that share the same hours, e.g. "Mon–Fri · 9 AM–12 PM Online".
+export function scheduleSummary(weekly={}){
+  const order=[1,2,3,4,5,6,0],groups=[];
+  for(const day of order){
+    const ranges=weekly[day]||[];if(!ranges.length)continue;
+    const key=JSON.stringify(ranges),last=groups.at(-1);
+    if(last&&last.key===key&&order.indexOf(last.days.at(-1))===order.indexOf(day)-1)last.days.push(day);else groups.push({key,days:[day],ranges});
+  }
+  const merged=[];for(const g of groups){const same=merged.find(m=>m.key===g.key);if(same)same.days.push(...g.days);else merged.push({...g,days:[...g.days]});}
+  const dayLabel=days=>{const idx=days.map(d=>order.indexOf(d));const run=idx.every((v,i)=>i===0||v===idx[i-1]+1);return run&&days.length>2?`${DAY_SHORT[days[0]]}–${DAY_SHORT[days.at(-1)]}`:days.map(d=>DAY_SHORT[d]).join(', ');};
+  const hours=Object.values(weekly).flat().reduce((sum,[start,end])=>sum+(minutes(end)-minutes(start))/60,0);
+  return {lines:merged.map(g=>`${dayLabel(g.days)} · ${g.ranges.map(([s,e,t])=>`${shortTime(s)}–${shortTime(e)}${t&&t!=='any'?' '+TYPE_SHORT[t]:''}`).join(', ')}`),hours};
 }

@@ -54,7 +54,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
           if(!hasAdminCredentials(req,adminCredentials)){challengeAdmin(res);return;}
           if(req.method==='GET'){
-            json(200,{teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))}))});return;
+            json(200,{teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))})),center:{email:config.centerEmail||null,connected:Boolean(store?.hasGoogleToken(CENTER_ID))}});return;
           }
           if(req.headers.origin!==config.publicOrigin)throw new BookingError('Teacher settings must be saved from the KieAn website.',403);
           if(!req.headers['content-type']?.startsWith('application/json'))throw new BookingError('JSON is required.',415);
@@ -128,10 +128,16 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         throw new BookingError('Not found.',404);
       }
       if(!['GET','HEAD'].includes(req.method))throw new BookingError('Method not allowed.',405);
-      const name=decodeURIComponent(url.pathname).replace(/^\//,'')||'index.html';
+      // Clean page URLs: /booking serves booking.html; old .html addresses redirect permanently.
+      const PAGES={'':'index.html',booking:'booking.html'},CLEAN={'index.html':'/','booking.html':'/booking'};
+      const path=decodeURIComponent(url.pathname).replace(/^\//,'');
+      if(CLEAN[path]){res.writeHead(301,{'Location':CLEAN[path]+url.search,'Cache-Control':'no-store'});res.end();return;}
+      const name=PAGES[path]??path;
       // Serve explicit public files only. Never expose configuration, credentials or SQLite.
       if(!PUBLIC.has(name)&&!/^assets\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(name))throw new BookingError('Not found.',404);
-      const content=await readFile(resolve(root,name));res.writeHead(200,{'Content-Type':types[extname(name)]||'application/octet-stream'});res.end(req.method==='HEAD'?undefined:content);
+      // Images can be cached for a week; CSS/JS linked with ?v= are versioned, so cache them long. Pages stay uncached.
+      const cache=name.startsWith('assets/')?'public, max-age=604800':/\.(css|js|mjs)$/.test(name)?(url.searchParams.has('v')?'public, max-age=31536000, immutable':'no-cache'):'no-store';
+      const content=await readFile(resolve(root,name));res.writeHead(200,{'Content-Type':types[extname(name)]||'application/octet-stream','Cache-Control':cache});res.end(req.method==='HEAD'?undefined:content);
     }catch(error){
       if(res.headersSent){res.end();return;}
       if(error instanceof BookingError)json(error.status,{error:error.message,...error.details});
