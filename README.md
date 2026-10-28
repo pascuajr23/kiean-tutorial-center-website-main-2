@@ -62,6 +62,8 @@ For the supplied systemd unit, put the OAuth client ID, client secret, one gener
 7. Run `npm run check-calendar`. This checks each teacher calendar without creating events.
 8. Complete a controlled five-session test booking. Confirm that all five events appear on the correct teacher calendar, in Philippine Time, and that the same slots are no longer offered. Remove that test booking with the cancellation command below after validation.
 
+To test the Google sign-in locally before deploying, set `publicOrigin` to `http://localhost:3000`, add `http://localhost:3000/api/google/callback` as an authorized redirect URI, leave `NODE_ENV` unset, and browse via `http://localhost:3000` (not `127.0.0.1`). Use Chrome or Firefox; Safari rejects the `Secure` state cookie over plain HTTP. Production still requires HTTPS.
+
 The integration does not add attendees, so it does not send automatic parent invitations. Each teacher can revoke KieAn access from their Google Account security settings; they will need to reconnect before bookings can resume.
 
 If replacing an already-live service-account setup, this change does not migrate old events or pending requests. Back up the database, resolve pending requests, and move or recreate existing schedule events on each teacher’s primary calendar before switching traffic; otherwise the new availability check will not see events left on the old shared calendars.
