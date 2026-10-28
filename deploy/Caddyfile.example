@@ -1,5 +1,16 @@
-# Use the domain from your approved configuration and point its DNS to this VPS.
-kieantutorial.com {
-    reverse_proxy 127.0.0.1:3000
-    encode zstd gzip
+# Host Caddy (/etc/caddy/Caddyfile). Caddy obtains and renews HTTPS certificates automatically.
+kieantutorial.com, www.kieantutorial.com {
+	# Bookings may carry up to ~20 MB of attachments.
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy 127.0.0.1:3001
+}
+
+# Development branch.
+proxy.kieantutorial.com {
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy 127.0.0.1:3000
 }

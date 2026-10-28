@@ -9,3 +9,6 @@ docs
 *.zip
 .git
 .env
+*.pdf
+deploy/kiean.env
+.claude
