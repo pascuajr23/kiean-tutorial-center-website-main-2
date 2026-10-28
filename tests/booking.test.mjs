@@ -10,7 +10,7 @@ import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail} from '../lib/mailer.mjs';
-import {loadConfig} from '../lib/config.mjs';
+import {loadConfig,validateTeacherRoster} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,slotsForDay,manilaDay,sessionRate,addDays} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
@@ -149,7 +149,7 @@ test('online booking gets Meet links, a total and a paid teacher email with atta
   const {dir,sent,service}=mailHarness(t);
   const b=await service.book({...payload(),attachments:[{kind:'request',name:'homework.png',type:'image/png',data:png},{kind:'receipt',name:'gcash.pdf',type:'application/pdf',data:pdf}]},NOW);
   assert.equal(b.total,1000);assert.equal(b.paid,true);assert(b.sessions.every(s=>s.meetLink.startsWith('https://meet.google.com/')));
-  assert.equal(sent.length,1);assert.equal(sent[0].to,'teacher@example.test');assert.match(sent[0].subject,/PAID/);assert.match(sent[0].text,/₱1,000/);assert.match(sent[0].text,/meet\.google\.com/);assert.equal(sent[0].attachments.length,2);
+  assert.deepEqual(sent.map(m=>m.to),['teacher@example.test','parent@example.test']);assert.match(sent[1].text,/meet\.google\.com/);assert.match(sent[1].subject,/^Mon, Jun 3, 2030 · Your KieAn schedule starts/);assert.equal(sent[0].to,'teacher@example.test');assert.match(sent[0].subject,/PAID/);assert.match(sent[0].text,/₱1,000/);assert.match(sent[0].text,/meet\.google\.com/);assert.equal(sent[0].attachments.length,2);
   assert.equal(readdirSync(join(dir,b.id)).length,2);
 });
 test('face-to-face booking emails the parent the full schedule and flags unpaid',async t=>{
@@ -192,4 +192,20 @@ test('email subjects start with the first session day and HTML escapes parent in
   assert.match(teacher.subject,/^Mon, Jun 3, 2030 · New schedule starts/);assert.match(parent.subject,/^Mon, Jun 3, 2030 · Your KieAn schedule starts/);
   assert(!teacher.html.includes('<script>'));assert(teacher.html.includes('&lt;script&gt;'));assert(teacher.html.includes('cid:kiean-logo'));assert.match(teacher.html,/Join Meet/);
   assert.match(mime(teacher),/Content-ID: <kiean-logo>/);
+});
+test('period types limit slots to online, face to face or SPED-only',async t=>{
+  const teacher={...config.teachers[0],weekly:{1:[['09:00','12:00','online'],['13:00','14:00','f2f'],['14:00','15:00','sped'],['15:00','16:00']]}};
+  const program=id=>PROGRAMS.find(p=>p.id===id);
+  assert.deepEqual(slotsForDay(teacher,program('online'),'2030-06-03',NOW),['09:00','10:00','11:00','15:00']);
+  assert.deepEqual(slotsForDay(teacher,program('academic'),'2030-06-03',NOW),['13:00','15:00']);
+  assert.deepEqual(slotsForDay(teacher,program('sped'),'2030-06-03',NOW),['13:00','14:00','15:00']);
+  // The server rejects an academic booking in a SPED-only hour.
+  const cfg={...config,teachers:[{...teacher,weekly:{1:[['14:00','15:00','sped']],2:[['14:00','15:00','sped']],3:[['14:00','15:00','sped']],4:[['14:00','15:00','sped']],5:[['14:00','15:00','sped']]}}]};
+  assert.throws(()=>validateBooking({...payload(),program:'academic',branch:'natania',time:'14:00',dates:weekdays(20)},cfg,NOW),/outside this teacher/);
+  assert.equal(validateBooking({...payload(),program:'sped',branch:'natania',time:'14:00',dates:weekdays(20)},cfg,NOW).sessions.length,20);
+});
+test('roster validation accepts known period types only',()=>{
+  const base={...config.teachers[0]};
+  assert.doesNotThrow(()=>validateTeacherRoster([{...base,weekly:{1:[['09:00','12:00','online'],['13:00','15:00','sped']]}}]));
+  assert.throws(()=>validateTeacherRoster([{...base,weekly:{1:[['09:00','12:00','vip']]}}]),/working hours/);
 });

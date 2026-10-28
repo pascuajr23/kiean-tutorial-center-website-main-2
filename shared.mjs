@@ -14,6 +14,16 @@ export const peso = amount => '₱' + amount.toLocaleString('en-PH');
 export const ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_REQUEST_FILES = 3;
+// A working period may be limited to a kind of lesson: [start, end] or [start, end, type].
+export const PERIOD_TYPES = [
+  {id: 'any', label: 'Any program'},
+  {id: 'online', label: 'Online only'},
+  {id: 'f2f', label: 'Face to face only'},
+  {id: 'sped', label: 'SPED face to face only'}
+];
+export function periodAllows(type = 'any', program) {
+  return type === 'any' || (type === 'online' && program.mode === 'online') || (type === 'f2f' && program.mode === 'branch') || (type === 'sped' && program.id === 'sped');
+}
 export const BRANCHES = [
   {id:'san-pedro',name:'San Pedro, Laguna'}, {id:'pila',name:'Pila, Laguna'},
   {id:'natania',name:'Natania Homes'}, {id:'south-square',name:'South Square'},
@@ -39,7 +49,8 @@ export function slotsForDay(teacher,program,day,now=new Date(),leadMinutes=60) {
   if (!validDate(day) || day < manilaDay(now) || day > addDays(manilaDay(now),HORIZON_DAYS) || teacher.blackoutDates?.includes(day)) return [];
   if (program.mode === 'branch' && [0,6].includes(weekday(day))) return [];
   const slots=[];
-  for(const [start,end] of teacher.weekly[weekday(day)] || []) {
+  for(const [start,end,type] of teacher.weekly[weekday(day)] || []) {
+    if(!periodAllows(type,program)) continue;
     for(let n=Math.ceil(minutes(start)/60)*60;n+program.slotMinutes<=minutes(end);n+=60) {
       const t=clock(n);
       if(instant(day,t).getTime() >= now.getTime()+leadMinutes*60000) slots.push(t);
