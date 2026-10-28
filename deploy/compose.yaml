@@ -1,0 +1,22 @@
+# KieAn main site. The host's Caddy serves kieantutorial.com and proxies to 127.0.0.1:3001.
+# The port is bound to localhost only, so the app is reachable solely through Caddy.
+services:
+  kiean:
+    image: ghcr.io/pascuajr23/kiean-tutorial-center-website-main-2:main
+    restart: unless-stopped
+    env_file:
+      - ./kiean.env
+    environment:
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./config:/etc/kiean
+      - ./data:/var/lib/kiean
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

@@ -111,58 +111,68 @@ The backend serves only explicitly allowed public files and approved image asset
 
 GitHub Actions runs the tests and builds the Docker image on pushes and pull requests. Pushes publish to `ghcr.io/OWNER/REPOSITORY` with a `sha-...` tag and a branch tag; the default branch also updates `latest`. GHCR packages are private by default, so grant the deployment host package-read access or change the package visibility before pulling anonymously.
 
-### Pull and run with Docker Compose
+### Deploy to the VPS with Docker (kieantutorial.com)
 
-On the deployment host, replace `OWNER/REPOSITORY` with the lowercase GitHub owner and repository. For a private GHCR package, authenticate with a GitHub personal access token that has `read:packages`; skip login if the package is public.
+GitHub Actions builds and publishes an image on every push: `ghcr.io/pascuajr23/kiean-tutorial-center-website-main-2:main` for `main`, a tag named after any other branch (for example `:development`), and an immutable `sha-…` tag per commit. The image runs as an unprivileged user, holds no secrets, and has a health check. `deploy/compose.yaml` runs the `:main` image on `127.0.0.1:3001` only. The host's Caddy (not a container) serves HTTPS and proxies to it; see `deploy/Caddyfile.example`.
+
+**1. DNS and Caddy.** Point `kieantutorial.com`, `www.kieantutorial.com` and `proxy.kieantutorial.com` to the VPS. Open only ports 80 and 443. In `/etc/caddy/Caddyfile`, proxy the main site to `127.0.0.1:3001` and add `request_body { max_size 25MB }` so booking attachments fit (see `deploy/Caddyfile.example`), then `sudo systemctl reload caddy`.
+
+**2. Folder on the VPS.**
 
 ```sh
-docker login ghcr.io --username YOUR_GITHUB_USERNAME
-docker pull ghcr.io/OWNER/REPOSITORY:latest
+sudo mkdir -p /opt/kiean && cd /opt/kiean
+# copy deploy/compose.yaml and deploy/kiean.env.example here
 mkdir -p config data
+cp kiean.env.example kiean.env && chmod 600 kiean.env
+sudo chown -R 1000:1000 config data && chmod 700 config data
 ```
 
-Create `config/config.json` from `config.example.json` and finish the live teacher, calendar, and HTTPS settings described above. Create `kiean.env` beside `compose.yaml` with the runtime settings and secrets:
+`config/` and `data/` must belong to uid 1000 (the container's `node` user). `config/` must be writable because `/admin` saves the roster there.
 
-```dotenv
-NODE_ENV=production
-KIEAN_CONFIG=/etc/kiean/config.json
-KIEAN_DATA_DIR=/var/lib/kiean
-GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
-GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
-KIEAN_TOKEN_ENCRYPTION_KEY=your-stable-base64-32-byte-key
-KIEAN_ADMIN_USER=center-admin
-KIEAN_ADMIN_PASSWORD=replace-with-a-long-unique-password
-```
+**3. Settings.**
+- `config/config.json`: copy your local `config.json` (teachers, `centerEmail`, `paymentInstructions`) and set `"publicOrigin": "https://kieantutorial.com"`. Then `chmod 600 config/config.json && sudo chown 1000:1000 config/config.json`.
+- `kiean.env`: fill in the values listed in `kiean.env.example`. Generate a **new** `KIEAN_TOKEN_ENCRYPTION_KEY` and admin password for production; do not reuse the local ones.
 
-Restrict access to the private settings (`chmod 700 config && chmod 600 config/config.json kiean.env`). Add this `compose.yaml` beside them:
-
-```yaml
-services:
-  kiean:
-    image: ghcr.io/OWNER/REPOSITORY:latest
-    restart: unless-stopped
-    env_file:
-      - ./kiean.env
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      - ./config:/etc/kiean
-      - ./data:/var/lib/kiean
-```
-
-Start the service and check its logs:
+**4. Pull and start.** The GHCR package is private by default. Log in once with a GitHub personal access token (classic) that has only `read:packages`:
 
 ```sh
+docker login ghcr.io -u pascuajr23
 docker compose pull
 docker compose up -d
+docker compose ps        # kiean should become "healthy"
 docker compose logs -f kiean
 ```
 
-The localhost-only port mapping works with the included Caddy reverse-proxy example. To deploy a specific commit instead of the latest default-branch image, replace `latest` in `compose.yaml` with its immutable `sha-...` tag. To update later, run `docker compose pull && docker compose up -d`; the `data` and `config` directories remain on the host.
+The log should end with `(LIVE)`. Check `curl -sI http://127.0.0.1:3001` on the VPS, then open https://kieantutorial.com.
 
-`TRUST_PROXY=1` is appropriate only when the Node server is reachable exclusively through the trusted proxy. It enables per-client rate limits using the final forwarded address. Keep the Node listener on `127.0.0.1` for the provided VPS setup. A Dockerfile is also supplied for container deployments; mount private config and persistent data at runtime.
+**5. Connect Google on the live site.** Connections made on localhost stay on your computer and are not copied to the VPS. On https://kieantutorial.com:
+- each teacher opens `https://kieantutorial.com/api/teachers/TEACHER_ID/google/connect`;
+- in `/admin`, click **Connect center Google account (emails & invites)** and sign in as `kieanadmin@gmail.com`.
 
-Keep one persistent SQLite database shared by the application processes on the same host. Do not run independent copies against different databases for the same teacher calendars. Site requests reserve all slots in one SQLite transaction, including overlapping 30-minute start times, before touching Google Calendar. Back up the database securely using SQLite-aware backups or while the service is stopped. Calendar and booking records contain personal information; apply the center’s retention process.
+**Update to a new version:** `docker compose pull && docker compose up -d`. To pin or roll back, replace `main` in `compose.yaml` with a `sha-…` tag.
+
+**Development site (proxy.kieantutorial.com, port 3000).** Use a separate folder (e.g. `/opt/kiean-dev`) with its own `compose.yaml` (image tag set to your branch name, port `"127.0.0.1:3000:3000"`), its own `config/`, `data/` and `kiean.env`, and `"publicOrigin": "https://proxy.kieantutorial.com"`. Add `https://proxy.kieantutorial.com/api/google/callback` to the dev OAuth client. Never share `data/` between main and development: both would book the same teacher calendars.
+
+**Cancel or reconcile a booking** (the server must be stopped):
+
+```sh
+docker compose stop kiean
+docker compose run --rm kiean node scripts/reconcile.mjs --cancel KTC-REFERENCE --server-stopped
+docker compose start kiean
+```
+
+**Back up** `config/`, `data/` (SQLite database and uploaded receipts) and `kiean.env` together, encrypted and off the VPS, e.g. nightly: `docker compose stop kiean && sudo tar czf kiean-$(date +%F).tgz config data kiean.env && docker compose start kiean`. Without the encryption key, the stored Google connections cannot be read.
+
+### Using the Google API securely
+
+- **Rotate the client secret before going live.** The current secret was shared in a chat. In Google Cloud Console → Clients → your Web client, add a new secret, put it in the VPS `kiean.env`, restart, then delete the old one.
+- **Separate dev and production.** Create a second OAuth client for local testing (redirect `http://localhost:3000/api/google/callback`). The production client should list only `https://kieantutorial.com/api/google/callback` as its redirect URI and no JavaScript origins.
+- **Branding.** Add `kieantutorial.com` as an authorized domain and set the home page and privacy policy URLs.
+- **Publish the app.** While the consent screen is in *Testing*, Google expires refresh tokens after 7 days, so calendars and emails stop working weekly. Switch the audience to *In production* and complete Google's verification for the sensitive scopes (`calendar.events`, `calendar.freebusy`, `gmail.send`).
+- **Least privilege.** The app requests only those scopes plus `openid`/`email`. It needs no API key. Enable only the Google Calendar API and Gmail API in the project.
+- **Secrets stay on the VPS.** Only in `kiean.env` (mode 600) and `config/`. They are excluded from the image and from git. Refresh tokens are stored AES-256-GCM-encrypted in SQLite with `KIEAN_TOKEN_ENCRYPTION_KEY`.
+- **Admin.** Use a long random `KIEAN_ADMIN_PASSWORD` and open `/admin` only over HTTPS.
+- **Revoking.** Any teacher or the center can revoke access at https://myaccount.google.com/permissions; they then reconnect from the links above.
 
 ## Failed updates and cancellations
 
