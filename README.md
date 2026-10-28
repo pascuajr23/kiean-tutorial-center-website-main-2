@@ -117,35 +117,114 @@ GitHub Actions builds and publishes an image on every push: `ghcr.io/pascuajr23/
 
 **1. DNS and Caddy.** Point `kieantutorial.com`, `www.kieantutorial.com` and `proxy.kieantutorial.com` to the VPS. Open only ports 80 and 443. In `/etc/caddy/Caddyfile`, proxy the main site to `127.0.0.1:3001` and add `request_body { max_size 25MB }` so booking attachments fit (see `deploy/Caddyfile.example`), then `sudo systemctl reload caddy`.
 
-**2. Folder on the VPS.**
+**2. Create the folder and `compose.yaml`.** Run these on the VPS:
 
 ```sh
-sudo mkdir -p /opt/kiean && cd /opt/kiean
-# copy deploy/compose.yaml and deploy/kiean.env.example here
-mkdir -p config data
-cp kiean.env.example kiean.env && chmod 600 kiean.env
-sudo chown -R 1000:1000 config data && chmod 700 config data
+sudo mkdir -p /opt/kiean/config /opt/kiean/data
+sudo chown -R "$USER" /opt/kiean
+cd /opt/kiean
+nano compose.yaml
 ```
 
-`config/` and `data/` must belong to uid 1000 (the container's `node` user). `config/` must be writable because `/admin` saves the roster there.
+Paste this into `compose.yaml` (the same file as `deploy/compose.yaml` in this repository):
 
-**3. Settings.**
-- `config/config.json`: copy your local `config.json` (teachers, `centerEmail`, `paymentInstructions`) and set `"publicOrigin": "https://kieantutorial.com"`. Then `chmod 600 config/config.json && sudo chown 1000:1000 config/config.json`.
-- `kiean.env`: fill in the values listed in `kiean.env.example`. Generate a **new** `KIEAN_TOKEN_ENCRYPTION_KEY` and admin password for production; do not reuse the local ones.
+```yaml
+# KieAn main site. The host's Caddy serves kieantutorial.com and proxies to 127.0.0.1:3001.
+# The port is bound to localhost only, so the app is reachable solely through Caddy.
+services:
+  kiean:
+    image: ghcr.io/pascuajr23/kiean-tutorial-center-website-main-2:main
+    restart: unless-stopped
+    env_file:
+      - ./kiean.env
+    environment:
+      TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./config:/etc/kiean
+      - ./data:/var/lib/kiean
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+```
 
-**4. Pull and start.** The GHCR package is private by default. Log in once with a GitHub personal access token (classic) that has only `read:packages`:
+**3. Add the secrets in `kiean.env`.** The app reads all secrets from this one file. Docker Compose loads it through `env_file`, and it is never in git or in the image. Create it with a fresh encryption key and admin password already generated:
 
 ```sh
+cd /opt/kiean
+umask 077
+cat > kiean.env <<EOF
+GOOGLE_OAUTH_CLIENT_ID=PASTE_CLIENT_ID
+GOOGLE_OAUTH_CLIENT_SECRET=PASTE_CLIENT_SECRET
+KIEAN_TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+KIEAN_ADMIN_USER=kieanadmin@gmail.com
+KIEAN_ADMIN_PASSWORD=$(openssl rand -base64 24)
+EOF
+nano kiean.env
+```
+
+In `nano`, replace `PASTE_CLIENT_ID` and `PASTE_CLIENT_SECRET`. Write values without quotes or spaces around `=`.
+
+| Secret | Where it comes from |
+| --- | --- |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud Console → Google Auth Platform → Clients → your **production** Web client → Client ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Same client → **Add secret** (use a new one; the old one was shared in chat) |
+| `KIEAN_TOKEN_ENCRYPTION_KEY` | Generated above. Keep it forever and back it up offline: changing or losing it disconnects every teacher and the center account. |
+| `KIEAN_ADMIN_USER` / `KIEAN_ADMIN_PASSWORD` | Your `/admin` login. Show the generated password with `grep KIEAN_ADMIN_PASSWORD kiean.env` and store it in a password manager. |
+
+In the Google client, the **Authorized redirect URI** must be exactly `https://kieantutorial.com/api/google/callback`.
+
+`NODE_ENV`, `PORT`, `KIEAN_CONFIG` and `KIEAN_DATA_DIR` are already set inside the image. Do not add them.
+
+**4. Add the site settings in `config/config.json`.** Copy your working local file from your computer:
+
+```sh
+# on your computer, in the project folder
+scp config.json YOUR_VPS_USER@YOUR_VPS:/opt/kiean/config/config.json
+```
+
+Then on the VPS, open `nano /opt/kiean/config/config.json` and check these values:
+
+```json
+"mode": "live",
+"publicOrigin": "https://kieantutorial.com",
+"centerEmail": "kieanadmin@gmail.com",
+"paymentInstructions": "GCash: 09XX XXX XXXX (Account Name) ...",
+```
+
+Each teacher's `googleEmail` must be the Google account they will connect. Remove local test teachers you do not want on the live site.
+
+**5. Lock down permissions.** The container runs as uid 1000. It must own `config/` (the `/admin` page saves the roster there) and `data/` (database and uploaded receipts):
+
+```sh
+cd /opt/kiean
+chmod 600 kiean.env config/config.json
+sudo chown -R 1000:1000 config data
+sudo chmod 700 config data
+```
+
+**6. Pull and start.** The GHCR package is private by default. Log in once with a GitHub personal access token (classic) that has only the `read:packages` scope. Paste the token as the password:
+
+```sh
+cd /opt/kiean
 docker login ghcr.io -u pascuajr23
 docker compose pull
 docker compose up -d
-docker compose ps        # kiean should become "healthy"
-docker compose logs -f kiean
+docker compose ps                 # STATUS should become "healthy"
+docker compose logs -f kiean      # last line should end with (LIVE)
+curl -sI http://127.0.0.1:3001    # should answer HTTP/1.1 200
 ```
 
-The log should end with `(LIVE)`. Check `curl -sI http://127.0.0.1:3001` on the VPS, then open https://kieantutorial.com.
+If the container stops, `docker compose logs kiean` names the missing or invalid setting. For example, `Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.` means `kiean.env` is incomplete. To confirm a value reached the container without printing the secret: `docker compose exec kiean sh -c 'test -n "$GOOGLE_OAUTH_CLIENT_SECRET" && echo set'`. Do not share the output of `docker compose config`; it prints every secret.
 
-**5. Connect Google on the live site.** Connections made on localhost stay on your computer and are not copied to the VPS. On https://kieantutorial.com:
+After editing `kiean.env` or `config/config.json` (use `sudo nano` for the config, since uid 1000 owns it), apply the change with `docker compose up -d --force-recreate`.
+
+**7. Connect Google on the live site.** Connections made on localhost stay on your computer and are not copied to the VPS. On https://kieantutorial.com:
 - each teacher opens `https://kieantutorial.com/api/teachers/TEACHER_ID/google/connect`;
 - in `/admin`, click **Connect center Google account (emails & invites)** and sign in as `kieanadmin@gmail.com`.
 
