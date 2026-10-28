@@ -32,7 +32,7 @@ Do not open `booking.html` by double-clicking it: its JavaScript modules need an
 - The teacher’s calendar receives **one private, busy event for each selected date**. Events include the parent’s contact details and the learning request, for the assigned teacher’s use.
 - The site confirms only when every calendar event is successfully created. Retrying the same request does not create duplicate events.
 - Step 3 shows the total price (sessions × per-session rate: Online ₱200; Academic/After School ₱150; SPED ₱300; San Pedro Academic ₱250 and SPED ₱400). Parents can attach up to 3 homework files and one payment receipt (JPG, PNG, WebP or PDF, 5 MB each). Files are checked by type and signature and saved in `KIEAN_DATA_DIR/uploads/<booking id>/`. Payment instructions come from `paymentInstructions` in `config.json`.
-- Online bookings create **one** invitation on the center Google Calendar (`centerEmail`) covering every session date, with one Google Meet link. The parent and the teacher are guests, so both can join Meet without being admitted. The teacher also keeps a private busy event per session with the Meet link. Face-to-face parents get one branded email with the full schedule.
+- Online bookings create **one** invitation on the center Google Calendar (`centerEmail`) covering every session date, with one Google Meet link. The parent and the teacher are guests, so both can join Meet without being admitted. The teacher also keeps a private busy event per session with the Meet link. Every parent also gets one branded email with the full schedule (online: with the Meet link).
 - Email subjects start with the first session day, for example `Mon, Nov 2, 2026 · New schedule starts · …`. Emails use the website's colours and logo, with a plain-text fallback.
 - The assigned teacher gets an email for every new booking with the schedule, total, uploaded files, and **PAID** (receipt uploaded) or **UNPAID**. Emails are sent from the center Gmail (`centerEmail` in `config.json`). If an email fails, the booking still stands and the error is logged.
 
@@ -85,8 +85,17 @@ Each teacher needs a unique `id` and unique `googleEmail`. A single teacher shou
 | `branches` | `online`, `san-pedro`, `pila`, `natania`, `south-square`, `san-francisco`, `maliksi`, `naic` |
 | `weekly` | Day keys: `0` Sunday, `1` Monday, through `6` Saturday |
 | Working periods | Arrays such as `[["09:00","12:00"],["13:00","17:00"]]`, all in Philippine Time |
+| Period type | Optional third value: `online` (Online Tutorial only), `f2f` (Academic, After School, SPED), `sped` (SPED face to face only). Omitted means any program. Example: `["09:00","12:00","online"]` |
 | `blackoutDates` | Closed dates such as `["2026-12-25", "2027-01-01"]` |
 | `leadMinutes` | Minimum advance notice, at least 60 minutes |
+
+To copy a portfolio teacher schedule (pp. 28–34) into `/admin`, add one period per block for each weekday it applies to (use separate weekday rows for MWF and TTh patterns):
+
+- Online blocks such as 9:00–9:50, 10:00–10:50: one **Online only** period 09:00–12:00 (each 50-minute lesson uses a one-hour slot).
+- Face-to-face tutorial slots: **Face to face only**.
+- Slots marked "OPEN FOR SPED": **SPED face to face only**.
+- Lunch breaks, Nursery and Playgroup group classes: leave them out, so they are never offered.
+- "FULL SLOT" hours: leave them out, or let the teacher's Google Calendar events block them.
 
 Working periods generate start times on the whole hour only (for example 10:00, 11:00) and require the full hour to fit before closing. A period starting at 09:30 offers its first slot at 10:00. Lunch breaks, holidays and approved operating hours must be supplied by the center. The PDF does not establish 9 AM–5 PM or 10 PM as current operating hours; those unsupported claims were removed from the public site. Hours in the sample configuration are examples only.
 

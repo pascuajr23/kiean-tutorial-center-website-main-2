@@ -1,4 +1,4 @@
-import {BRANCHES,PROGRAMS} from './shared.mjs';
+import {BRANCHES,PROGRAMS,PERIOD_TYPES} from './shared.mjs';
 
 const $=selector=>document.querySelector(selector);
 const list=$('#teacher-list'),form=$('#roster-form'),message=$('#admin-message');
@@ -34,7 +34,10 @@ function makeTimeRange(list,range={},day='day'){
   const row=node('div','time-range'),start=node('input'),end=node('input'),remove=node('button','remove-period','×');
   start.type=end.type='time';start.value=range[0]||'';end.value=range[1]||'';start.required=end.required=true;start.dataset.timeField='start';end.dataset.timeField='end';start.setAttribute('aria-label',`${day} available from`);end.setAttribute('aria-label',`${day} available until`);
   remove.type='button';remove.setAttribute('aria-label','Remove availability period');remove.addEventListener('click',()=>row.remove());
-  row.append(start,node('span','range-separator','to'),end,remove);list.append(row);
+  const type=node('select','period-type');type.dataset.timeField='type';type.setAttribute('aria-label',`${day} period is for`);
+  for(const option of PERIOD_TYPES){const item=node('option','',option.label);item.value=option.id;type.append(item);}
+  type.value=range[2]||'any';
+  row.append(start,node('span','range-separator','to'),end,remove,type);list.append(row);
 }
 function makeTeacherCard(teacher){
   const card=node('article','teacher-card');card.dataset.teacherId=teacher.id;
@@ -62,7 +65,7 @@ function makeTeacherCard(teacher){
     const dayLabel=node('label','weekday-toggle'),dayToggle=node('input');dayToggle.type='checkbox';dayToggle.checked=ranges.length>0;dayToggle.dataset.dayToggle='true';dayLabel.append(dayToggle,node('span','',day));
     const rangeList=node('div','day-ranges');for(const range of ranges)makeTimeRange(rangeList,range,day);
     const addPeriod=node('button','add-period','Add hours');addPeriod.type='button';addPeriod.disabled=!dayToggle.checked;addPeriod.addEventListener('click',()=>makeTimeRange(rangeList,{},day));
-    dayToggle.addEventListener('change',()=>{addPeriod.disabled=!dayToggle.checked;rangeList.querySelectorAll('input,button').forEach(control=>{control.disabled=!dayToggle.checked;});});
+    dayToggle.addEventListener('change',()=>{addPeriod.disabled=!dayToggle.checked;rangeList.querySelectorAll('input,button,select').forEach(control=>{control.disabled=!dayToggle.checked;});});
     const controls=node('div','weekday-controls');controls.append(rangeList,addPeriod);row.append(dayLabel,controls);weeklyGrid.append(row);
   });
   schedule.append(weeklyGrid);body.append(schedule);
@@ -87,7 +90,7 @@ function readForm(){
     const weekly={};
     for(const row of card.querySelectorAll('.weekday-row')){
       if(!row.querySelector('[data-day-toggle]').checked)continue;
-      const ranges=[...row.querySelectorAll('.time-range')].map(range=>[range.querySelector('[data-time-field="start"]').value,range.querySelector('[data-time-field="end"]').value]);
+      const ranges=[...row.querySelectorAll('.time-range')].map(range=>{const field=name=>range.querySelector(`[data-time-field="${name}"]`).value,type=field('type');return type==='any'?[field('start'),field('end')]:[field('start'),field('end'),type];});
       if(ranges.length)weekly[row.dataset.weekday]=ranges;
     }
     return {...current,name:value('name').value.trim(),googleEmail:value('googleEmail').value.trim().toLowerCase(),bio:value('bio').value.trim(),available:value('available').checked,programs:selected('programs'),branches:selected('branches'),weekly};
