@@ -1,5 +1,7 @@
 # Host Caddy (/etc/caddy/Caddyfile). Caddy obtains and renews HTTPS certificates automatically.
 kieantutorial.com, www.kieantutorial.com {
+	# Compress pages, CSS and JS (images are already compressed).
+	encode zstd gzip
 	# Bookings may carry up to ~20 MB of attachments.
 	request_body {
 		max_size 25MB
@@ -9,6 +11,7 @@ kieantutorial.com, www.kieantutorial.com {
 
 # Development branch.
 proxy.kieantutorial.com {
+	encode zstd gzip
 	request_body {
 		max_size 25MB
 	}

@@ -3,18 +3,20 @@
 .selection-title{margin:0 0 10px}
 .connection-link[aria-disabled=true]{opacity:.45;pointer-events:none}
 .weekly-group{min-width:0;margin:20px 0 0;padding:0;border:0}
-.weekly-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:8px 24px}
+.weekly-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:8px 32px}
 .weekday-row{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:start;gap:10px;padding:9px 0;border-top:1px solid #edf0ef}
-.weekday-toggle{display:flex;align-items:center;gap:7px;min-height:32px;color:#425167;font-size:12px;font-weight:700}
-.weekday-toggle input{width:15px;height:15px;margin:0;accent-color:#25694f}
+.weekday-toggle{display:flex;align-items:center;gap:7px;min-height:40px;color:var(--muted);font-size:12px;font-weight:700}
+.weekday-toggle input{width:15px;height:15px;margin:0;accent-color:var(--blue)}
 .weekday-controls{min-width:0}
 .day-ranges{display:grid;gap:6px}
-.time-range{display:grid;grid-template-columns:minmax(72px,1fr) 16px minmax(72px,1fr) 48px;align-items:center;gap:5px}
-.time-range input{width:100%;min-width:0;height:31px;border:1px solid #d7dce2;border-radius:4px;padding:4px 6px;color:#233349;font:12px 'DM Sans',Arial,sans-serif}
-.range-separator{text-align:center;color:#768193;font-size:10px}
-.remove-period,.add-period{min-height:29px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#825445;font:600 10px 'DM Sans',Arial,sans-serif;cursor:pointer}
-.add-period{margin-top:4px;color:#24529a}
-.remove-period:hover,.add-period:hover{background:#f2f5f5}
+.time-range{display:grid;grid-template-columns:minmax(96px,1fr) 16px minmax(96px,1fr) 40px;align-items:center;gap:5px}
+.time-range input{width:100%;min-width:0;height:40px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;color:var(--text);font:14px var(--font-body)}
+.range-separator{text-align:center;color:var(--muted);font-size:var(--fs-label)}
+.remove-period,.add-period{min-height:36px;padding:4px 6px;border:0;border-radius:var(--radius-sm);background:transparent;color:#825445;font:600 var(--fs-label) var(--font-body);cursor:pointer}
+.add-period{margin-top:4px;color:var(--blue)}
+.remove-period:hover,.add-period:hover{background:var(--light-bg)}
 .add-period:disabled{display:none}
 @media(max-width:440px){.weekly-grid{grid-template-columns:minmax(0,1fr)}.weekday-row{grid-template-columns:minmax(0,1fr);gap:3px}.time-range{grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr) 24px;gap:4px}.remove-period{font-size:18px;line-height:1}}
-.time-range .period-type{grid-column:1/-1;width:100%;min-width:0;height:31px;margin-bottom:6px;border:1px solid #d7dce2;border-radius:4px;padding:4px 6px;background:#fff;color:#233349;font:12px 'DM Sans',Arial,sans-serif}
+.time-range .period-type{grid-column:1/-1;width:100%;min-width:0;height:40px;margin-bottom:6px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;background:var(--white);color:var(--text);font:14px var(--font-body)}
+/* Phones: 16px inputs so iOS does not zoom in on focus. */
+@media(max-width:760px){.admin-field input,.admin-field textarea,.time-range input,.time-range .period-type{font-size:16px}}

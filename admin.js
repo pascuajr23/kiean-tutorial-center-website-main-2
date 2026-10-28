@@ -1,8 +1,9 @@
-import {BRANCHES,PROGRAMS,PERIOD_TYPES} from './shared.mjs';
+import {BRANCHES,PROGRAMS,PERIOD_TYPES,scheduleSummary} from './shared.mjs';
 
 const $=selector=>document.querySelector(selector);
 const list=$('#teacher-list'),form=$('#roster-form'),message=$('#admin-message');
-let teachers=[],savedIds=new Set();
+// The roster is shown as an overview of cards; one teacher at a time opens in the editor.
+let teachers=[],savedIds=new Set(),editing=null,dirty=false;
 const branchOptions=[{id:'online',name:'Online'},...BRANCHES];
 const weekdays=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 function node(tag,className,text){const element=document.createElement(tag);if(className)element.className=className;if(text!==undefined)element.textContent=text;return element;}
@@ -45,7 +46,7 @@ function makeTeacherCard(teacher){
   identity.append(node('span','teacher-initials',initials(teacher.name)));identity.lastChild.setAttribute('aria-hidden','true');
   const title=node('div','teacher-title');title.append(node('h2','',teacher.name||'New teacher'),node('code','teacher-id',teacher.id));identity.append(title);head.append(identity);
   if(!savedIds.has(teacher.id)){
-    const remove=node('button','draft-remove','Remove draft');remove.type='button';remove.addEventListener('click',()=>{teachers=readForm().filter(item=>item.id!==teacher.id);render();});head.append(remove);
+    const remove=node('button','draft-remove','Remove draft');remove.type='button';remove.addEventListener('click',()=>{teachers=teachers.filter(item=>item.id!==teacher.id);editing=null;dirty=false;render();setMessage('Draft removed.');});head.append(remove);
   }
   const availability=node('label','availability-switch'),toggle=node('input');toggle.type='checkbox';toggle.checked=teacher.available!==false;toggle.dataset.field='available';
   availability.append(toggle,node('span','','Accepting bookings'));head.append(availability);card.append(head);
@@ -76,14 +77,57 @@ function makeTeacherCard(teacher){
   if(!teacher.googleEmail||!savedIds.has(teacher.id)){connect.setAttribute('aria-disabled','true');connect.tabIndex=-1;connect.addEventListener('click',event=>event.preventDefault());}
   connection.append(connect);body.append(connection);card.append(body);return card;
 }
+function makeSummaryCard(teacher){
+  const card=node('button','teacher-summary');card.type='button';card.dataset.teacherId=teacher.id;
+  const head=node('div','summary-head');head.append(node('span','teacher-initials',initials(teacher.name)));
+  const title=node('div','summary-title');title.append(node('strong','',teacher.name||'New teacher'));
+  const tags=node('div','summary-tags');
+  const tag=(text,kind)=>{const t=node('span','summary-tag',text);t.dataset.kind=kind;tags.append(t);};
+  if(!savedIds.has(teacher.id))tag('Draft · not saved','draft');
+  tag(teacher.available!==false?'Accepting bookings':'Paused',teacher.available!==false?'on':'off');
+  tag(teacher.googleConnected?'Calendar connected':'Calendar not connected',teacher.googleConnected?'on':'warn');
+  title.append(tags);head.append(title);card.append(head);
+  const programNames=(teacher.programs||[]).map(id=>PROGRAMS.find(p=>p.id===id)?.name).filter(Boolean);
+  const branchNames=(teacher.branches||[]).map(id=>branchOptions.find(b=>b.id===id)?.name).filter(Boolean);
+  const meta=node('dl','summary-meta');
+  for(const [label,value] of [['Programs',programNames.join(', ')||'None'],['Branches',branchNames.join(', ')||'None']]){const row=node('div');row.append(node('dt','',label),node('dd','',value));meta.append(row);}
+  card.append(meta);
+  const {lines,hours}=scheduleSummary(teacher.weekly);
+  const sched=node('div','summary-schedule');sched.append(node('span','summary-label',`Weekly hours${hours?` · ${hours} h`:''}`));
+  if(lines.length)for(const line of lines)sched.append(node('span','summary-line',line));else sched.append(node('span','summary-line summary-empty','No hours set'));
+  card.append(sched,node('span','summary-open','Edit schedule →'));
+  card.addEventListener('click',()=>openEditor(teacher.id));
+  return card;
+}
+// Teachers accepting bookings first; paused teachers in their own section below.
+function overviewGroups(){
+  const open=teachers.filter(t=>t.available!==false),paused=teachers.filter(t=>t.available===false);
+  const group=(title,items,empty)=>{
+    const section=node('section','teacher-group'),grid=node('div','teacher-group-grid');
+    section.append(node('h2','teacher-group-title',`${title} · ${items.length}`));
+    if(items.length)grid.append(...items.map(makeSummaryCard));else grid.append(node('p','teacher-group-empty',empty));
+    section.append(grid);return section;
+  };
+  return [group('Accepting bookings',open,'No teacher is accepting bookings yet.'),...(paused.length?[group('Not accepting bookings',paused)]:[])];
+}
 function render(){
-  list.replaceChildren(...teachers.map(makeTeacherCard));
-  $('#teacher-count').textContent=String(teachers.length);
+  const editor=editing!==null;
+  list.classList.toggle('teacher-overview',!editor);
+  list.replaceChildren(...(editor?[makeTeacherCard(teachers.find(t=>t.id===editing))]:overviewGroups()));
+  $('#back-to-list').hidden=!editor;$('#save-roster').hidden=!editor;$('#add-teacher').hidden=editor;
+  $('#teacher-count').textContent=String(teachers.filter(t=>savedIds.has(t.id)).length);
   $('#bookable-count').textContent=String(teachers.filter(teacher=>teacher.available!==false&&teacher.googleConnected).length);
-  form.hidden=false;
+  form.hidden=false;dirty=false;
+}
+function openEditor(id){editing=id;render();window.scrollTo({top:list.offsetTop-120,behavior:'smooth'});list.querySelector('[data-field="name"]')?.focus({preventScroll:true});setMessage('Editing '+(teachers.find(t=>t.id===id)?.name||'teacher')+'. Save to keep changes.');}
+function backToList(){
+  if(dirty&&!confirm('Discard unsaved changes to this teacher?'))return;
+  if(editing!==null&&!savedIds.has(editing))teachers=teachers.filter(t=>t.id!==editing);
+  editing=null;render();setMessage('All teachers.');
 }
 function readForm(){
-  return [...list.querySelectorAll('.teacher-card')].map(card=>{
+  // Merge the open editor's values into the full roster; the server saves the whole roster.
+  const edited=new Map([...list.querySelectorAll('.teacher-card')].map(card=>{
     const current=teachers.find(teacher=>teacher.id===card.dataset.teacherId);
     const value=field=>card.querySelector(`[data-field="${field}"]`);
     const selected=group=>[...card.querySelectorAll(`[data-group="${group}"]:checked`)].map(input=>input.value);
@@ -93,17 +137,26 @@ function readForm(){
       const ranges=[...row.querySelectorAll('.time-range')].map(range=>{const field=name=>range.querySelector(`[data-time-field="${name}"]`).value,type=field('type');return type==='any'?[field('start'),field('end')]:[field('start'),field('end'),type];});
       if(ranges.length)weekly[row.dataset.weekday]=ranges;
     }
-    return {...current,name:value('name').value.trim(),googleEmail:value('googleEmail').value.trim().toLowerCase(),bio:value('bio').value.trim(),available:value('available').checked,programs:selected('programs'),branches:selected('branches'),weekly};
-  });
+    return [current.id,{...current,name:value('name').value.trim(),googleEmail:value('googleEmail').value.trim().toLowerCase(),bio:value('bio').value.trim(),available:value('available').checked,programs:selected('programs'),branches:selected('branches'),weekly}];
+  }));
+  return teachers.map(teacher=>edited.get(teacher.id)||teacher);
+}
+function showCenter(center){
+  const state=$('#center-state'),link=$('#center-connect');if(!center)return;
+  state.dataset.connected=String(center.connected);
+  state.replaceChildren(node('span','connection-dot'),node('span','',!center.email?'Set centerEmail in config.json first':center.connected?`Connected as ${center.email}`:`Not connected · sign in as ${center.email}`));
+  link.textContent=center.connected?'Reconnect':'Connect';link.hidden=!center.email;
 }
 async function load(){
   setMessage('Loading teacher roster…');
-  try{const data=await request('/api/admin/teachers');teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));render();setMessage('Roster loaded.','success');}
+  try{const data=await request('/api/admin/teachers');showCenter(data.center);teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));render();setMessage('Roster loaded.','success');}
   catch(error){setMessage(error.message==='fetch failed'?'Could not reach the booking server.':error.message,'error');form.hidden=true;}
 }
 async function refreshConnections(){
   try{
-    const statuses=new Map((await request('/api/admin/teachers')).teachers.map(teacher=>[teacher.id,teacher.googleConnected]));
+    const data=await request('/api/admin/teachers');showCenter(data.center);
+    const statuses=new Map(data.teachers.map(teacher=>[teacher.id,teacher.googleConnected]));
+    if(editing===null){teachers=teachers.map(teacher=>({...teacher,googleConnected:Boolean(statuses.get(teacher.id))}));render();return;}
     for(const card of list.querySelectorAll('.teacher-card')){
       const connected=Boolean(statuses.get(card.dataset.teacherId)),state=card.querySelector('.connection-state'),link=card.querySelector('.connection-link'),email=card.querySelector('[data-field="googleEmail"]');
       state.dataset.connected=String(connected);state.replaceChildren(node('span','connection-dot'),node('span','',connected?'Google Calendar connected':'Google Calendar not connected'));
@@ -115,13 +168,17 @@ async function refreshConnections(){
   }catch{}
 }
 $('#add-teacher').addEventListener('click',()=>{
-  teachers=readForm();
-  teachers.push({id:`teacher-${crypto.randomUUID().slice(0,8)}`,name:'New teacher',bio:'',googleEmail:'',available:false,programs:['online'],branches:['online'],weekly:{},blackoutDates:[]});
-  render();list.lastElementChild?.scrollIntoView({behavior:'smooth',block:'center'});list.lastElementChild?.querySelector('[data-field="name"]')?.focus();setMessage('New teacher draft added.');
+  const id=`teacher-${crypto.randomUUID().slice(0,8)}`;
+  teachers.push({id,name:'New teacher',bio:'',googleEmail:'',available:false,programs:['online'],branches:['online'],weekly:{},blackoutDates:[]});
+  openEditor(id);setMessage('New teacher draft. Fill in the details, then save.');
 });
+$('#back-to-list').addEventListener('click',backToList);
+list.addEventListener('input',()=>{dirty=true;});
+list.addEventListener('click',event=>{if(event.target.closest('.remove-period,.add-period'))dirty=true;});
+window.addEventListener('beforeunload',event=>{if(dirty)event.preventDefault();});
 form.addEventListener('submit',async event=>{
   event.preventDefault();const button=$('#save-roster');button.disabled=true;setMessage('Saving teacher roster…');
-  try{const data=await request('/api/admin/teachers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teachers:readForm()})});teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));render();setMessage('Teacher settings saved.','success');}
+  try{const data=await request('/api/admin/teachers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teachers:readForm()})});const name=readForm().find(t=>t.id===editing)?.name;teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));editing=null;render();setMessage(`${name||'Teacher'} saved.`,'success');window.scrollTo({top:0,behavior:'smooth'});}
   catch(error){setMessage(error.message,'error');}
   finally{button.disabled=false;}
 });

@@ -13,6 +13,7 @@
     --orange: #F47A20;
     --orange-dark: #D85F0B;
     --orange-light: #FFF0E5;
+    --orange-ink: #A84A0A; /* orange text on light-orange backgrounds */
 
     --green: #8BCB2E;
     --green-light: #EFF9DF;
@@ -28,14 +29,66 @@
     --light-bg: #F6F8FC;
 
     --text: #26344D;
-    --muted: #6B7688;
+    --muted: #5A6678; /* 4.5:1+ on every page background */
     --border: #E1E6EF;
 
     --shadow-sm: 0 8px 25px rgba(18, 59, 142, 0.08);
     --shadow: 0 20px 60px rgba(18, 59, 142, 0.12);
 
-    --radius: 18px;
     --container: 1180px;
+
+    /* Type: Nunito headings, DM Sans body (existing brand fonts). */
+    --font-heading: "Nunito", Arial, sans-serif;
+    --font-body: "DM Sans", Arial, sans-serif;
+    --fs-hero: clamp(38px, 4.4vw + 0.5rem, 60px);
+    --fs-h2: clamp(30px, 2.2vw + 1rem, 42px);
+    --fs-h3: 22px;
+    --fs-lead: 18px;
+    --fs-body: 17px;
+    --fs-card: 15px;
+    --fs-small: 14px;
+    --fs-meta: 13px;
+    --fs-label: 12px;
+    --fw-heading: 800;
+    --fw-title: 700;
+    --measure: 36em; /* about 65–70 characters of DM Sans */
+
+    /* Spacing: 8px scale; sections shrink on tablet and phone. */
+    --space-1: 8px;
+    --space-2: 16px;
+    --space-3: 24px;
+    --space-4: 32px;
+    --space-5: 40px;
+    --section-y: 96px;
+
+    /* One header for every page (home, booking, admin). */
+    --header-h: 82px;
+    --logo-w: 150px;
+
+    /* Corners */
+    --radius-sm: 10px;
+    --radius: 18px;
+    --radius-lg: 28px;
+    --radius-pill: 999px;
+}
+
+@media (max-width: 1050px) {
+    :root {
+        --section-y: 72px;
+    }
+}
+
+@media (max-width: 780px) {
+    :root {
+        --header-h: 70px;
+        --logo-w: 128px;
+    }
+}
+
+@media (max-width: 520px) {
+    :root {
+        --section-y: 56px;
+    }
 }
 
 
@@ -58,10 +111,7 @@ body {
     background: var(--off-white);
     color: var(--text);
     line-height: 1.6;
-}
-
-body.modal-open {
-    overflow: hidden;
+    font-size: 17px;
 }
 
 button,
@@ -80,8 +130,14 @@ a {
     text-decoration: none;
 }
 
+/* Staff shortcut to /admin: looks like plain text (still focusable for keyboard users). */
+.quiet-link {
+    cursor: inherit;
+}
+
 img {
     max-width: 100%;
+    height: auto;
     display: block;
 }
 
@@ -99,21 +155,17 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 14px;
-
+    gap: 10px;
     min-height: 48px;
-    padding: 13px 21px;
-
+    padding: 0 var(--space-3);
     border: 0;
-    border-radius: 9px;
-
-    font-size: 13px;
-    font-weight: 800;
-
+    border-radius: var(--radius-sm);
+    font-weight: 700;
     transition:
         transform 0.2s ease,
         background 0.2s ease,
         box-shadow 0.2s ease;
+    font-size: 15px;
 }
 
 .btn:hover {
@@ -157,28 +209,24 @@ img {
     padding: 15px 23px;
 }
 
-.arrow {
-    font-size: 17px;
-}
-
 
 /* =========================================================
    HEADER
 ========================================================= */
 
-.site-header {
+.site-header,
+.booking-header,
+.admin-header {
     position: sticky;
     top: 0;
     z-index: 100;
 
-    background: rgba(255, 252, 247, 0.94);
+    background: var(--off-white);
     border-bottom: 1px solid var(--border);
-
-    backdrop-filter: blur(15px);
 }
 
 .nav-wrap {
-    min-height: 82px;
+    min-height: var(--header-h);
 
     display: flex;
     align-items: center;
@@ -187,7 +235,7 @@ img {
 }
 
 .brand img {
-    width: 150px;
+    width: var(--logo-w);
     height: auto;
 }
 
@@ -200,12 +248,10 @@ img {
 
 .desktop-nav a {
     position: relative;
-
-    color: #536075;
-    font-size: 12px;
-    font-weight: 700;
-
+    color: var(--muted);
+    font-weight: 600;
     transition: color 0.2s ease;
+    font-size: var(--fs-small);
 }
 
 .desktop-nav a::after {
@@ -218,7 +264,7 @@ img {
     width: 0;
     height: 2px;
 
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     background: var(--orange);
 
     transition: width 0.2s ease;
@@ -243,7 +289,7 @@ img {
     height: 44px;
 
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--radius-sm);
 
     background: var(--white);
 }
@@ -272,7 +318,7 @@ img {
     position: relative;
     overflow: hidden;
 
-    padding: 92px 0 90px;
+    padding: var(--section-y) 0;
 
     background:
         radial-gradient(circle at 90% 20%, rgba(139, 203, 46, 0.09), transparent 24%),
@@ -300,19 +346,17 @@ img {
     display: flex;
     align-items: center;
     gap: 10px;
-
     color: var(--blue);
-
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 2px;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.12em;
 }
 
 .eyebrow-line {
     width: 28px;
     height: 3px;
 
-    border-radius: 20px;
+    border-radius: var(--radius-pill);
     background: var(--orange);
 }
 
@@ -320,10 +364,10 @@ img {
     margin-top: 19px;
 
     font-family: "Nunito", sans-serif;
-    font-size: clamp(46px, 5.2vw, 70px);
-    font-weight: 900;
-    line-height: 1.03;
-    letter-spacing: -2.3px;
+    font-size: var(--fs-hero);
+    font-weight: var(--fw-heading);
+    line-height: 1.1;
+    letter-spacing: -0.035em;
 
     color: var(--text);
 }
@@ -358,22 +402,10 @@ img {
     display: flex;
     align-items: center;
     gap: 9px;
-
     margin-top: 18px;
-
     color: var(--muted);
-    font-size: 11px;
     font-weight: 600;
-}
-
-.live-dot {
-    width: 8px;
-    height: 8px;
-
-    border-radius: 50%;
-    background: var(--green);
-
-    box-shadow: 0 0 0 5px rgba(139, 203, 46, 0.12);
+    font-size: 14px;
 }
 
 
@@ -399,7 +431,7 @@ img {
 
     padding: 48px;
 
-    border-radius: 30px;
+    border-radius: var(--radius-lg);
 
     background: linear-gradient(145deg, var(--blue), #174CA8);
     color: var(--white);
@@ -444,21 +476,16 @@ img {
 .new-pill {
     position: relative;
     z-index: 2;
-
     display: inline-flex;
     align-items: center;
     gap: 7px;
-
     padding: 7px 11px;
-
     border: 1px solid rgba(255, 255, 255, 0.17);
-    border-radius: 30px;
-
+    border-radius: var(--radius-pill);
     background: rgba(255, 255, 255, 0.09);
-
-    font-size: 8px;
     font-weight: 900;
     letter-spacing: 1.3px;
+    font-size: var(--fs-label);
 }
 
 .new-pill span {
@@ -483,8 +510,8 @@ img {
     margin-top: 18px;
 
     font-family: "Nunito", sans-serif;
-    font-size: 38px;
-    font-weight: 900;
+    font-size: clamp(26px, 1.6vw + 14px, 34px);
+    font-weight: var(--fw-heading);
     line-height: 1.08;
 }
 
@@ -496,13 +523,10 @@ img {
 .hero-card > p {
     position: relative;
     z-index: 2;
-
     margin-top: 17px;
-
     color: rgba(255, 255, 255, 0.72);
-
-    font-size: 13px;
-    line-height: 1.75;
+    font-size: 16px;
+    line-height: 1.65;
 }
 
 .mini-features {
@@ -519,10 +543,8 @@ img {
     display: flex;
     align-items: center;
     gap: 9px;
-
     color: rgba(255, 255, 255, 0.86);
-
-    font-size: 12px;
+    font-size: 15px;
 }
 
 .mini-features span {
@@ -533,21 +555,16 @@ img {
 .card-cta {
     position: relative;
     z-index: 2;
-
-    margin-top: 26px;
-
+    margin-top: var(--space-3);
     padding: 13px 18px;
-
     border: 0;
-    border-radius: 8px;
-
+    border-radius: var(--radius-sm);
     background: var(--orange);
     color: var(--white);
-
-    font-size: 12px;
     font-weight: 800;
-
     transition: 0.2s ease;
+    font-size: 15px;
+    display: inline-flex;
 }
 
 .card-cta:hover {
@@ -677,12 +694,10 @@ img {
 
 .stat strong {
     display: block;
-
     color: var(--blue);
-
     font-family: "Nunito", sans-serif;
-    font-size: 19px;
     font-weight: 900;
+    font-size: 22px;
 }
 
 .stat span {
@@ -691,7 +706,7 @@ img {
     margin-top: 2px;
 
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--fs-label);
 }
 
 
@@ -700,20 +715,20 @@ img {
 ========================================================= */
 
 .section {
-    padding: 105px 0;
+    padding: var(--section-y) 0;
 }
 
 .section-number {
     color: var(--orange);
 
-    font-size: 10px;
+    font-size: var(--fs-label);
     font-weight: 900;
     letter-spacing: 2px;
 }
 
 .section-heading {
     max-width: 760px;
-    margin-bottom: 52px;
+    margin-bottom: var(--space-5);
 }
 
 .section-kicker span {
@@ -726,13 +741,13 @@ img {
 .schedule-grid h2,
 .leadership-heading h2,
 .investment-heading h2 {
-    margin-top: 15px;
+    margin-top: var(--space-2);
 
     font-family: "Nunito", sans-serif;
-    font-size: clamp(37px, 4vw, 54px);
-    font-weight: 900;
-    line-height: 1.08;
-    letter-spacing: -1.5px;
+    font-size: var(--fs-h2);
+    font-weight: var(--fw-heading);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
 }
 
 .section-heading h2 span,
@@ -782,7 +797,7 @@ img {
     padding: 24px 27px;
 
     border-left: 4px solid var(--orange);
-    border-radius: 0 12px 12px 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 
     background: var(--white);
 
@@ -810,7 +825,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 18px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
 }
 
 .mission-box p {
@@ -830,7 +845,7 @@ img {
     position: relative;
     overflow: hidden;
 
-    padding: 105px 0;
+    padding: var(--section-y) 0;
 
     background: var(--blue);
     color: var(--white);
@@ -917,7 +932,7 @@ img {
 .card-number {
     color: var(--yellow);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
     font-weight: 900;
     letter-spacing: 2px;
 }
@@ -932,7 +947,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 22px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
     line-height: 1.15;
 }
 
@@ -958,7 +973,7 @@ img {
     padding: 23px 26px;
 
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
 
     background: rgba(255, 255, 255, 0.045);
 }
@@ -973,11 +988,9 @@ img {
 
 .online-cta span {
     display: block;
-
     margin-top: 3px;
-
     color: rgba(255, 255, 255, 0.58);
-    font-size: 11px;
+    font-size: 14px;
 }
 
 
@@ -1005,7 +1018,7 @@ img {
 
     border: 1px solid var(--border);
     border-top-width: 4px;
-    border-radius: 14px;
+    border-radius: var(--radius);
 
     box-shadow: 0 4px 15px rgba(18, 59, 142, 0.025);
 
@@ -1043,16 +1056,6 @@ img {
     font-size: 28px;
 }
 
-.program-logo {
-    width: 56px;
-    height: 56px;
-
-    object-fit: contain;
-
-    border-radius: 10px;
-    background: var(--white);
-}
-
 .program-card h3 {
     margin-top: 22px;
 
@@ -1060,7 +1063,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 21px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
     line-height: 1.15;
 }
 
@@ -1069,53 +1072,8 @@ img {
 
     color: var(--muted);
 
-    font-size: 11.5px;
+    font-size: var(--fs-label);
     line-height: 1.75;
-}
-
-.featured-program {
-    background: var(--orange);
-    border-top-color: var(--orange);
-    color: var(--white);
-}
-
-.featured-program h3 {
-    color: var(--white);
-}
-
-.featured-program p {
-    color: rgba(255, 255, 255, 0.78);
-}
-
-.featured-program button {
-    margin-top: 17px;
-
-    padding: 0;
-
-    border: 0;
-    background: transparent;
-
-    color: var(--white);
-
-    font-size: 11px;
-    font-weight: 900;
-}
-
-.program-new {
-    position: absolute;
-
-    top: 18px;
-    right: 18px;
-
-    padding: 5px 8px;
-
-    border-radius: 5px;
-
-    background: rgba(255, 255, 255, 0.18);
-
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: 1px;
 }
 
 
@@ -1124,7 +1082,7 @@ img {
 ========================================================= */
 
 .schedule-section {
-    padding: 90px 0;
+    padding: var(--section-y) 0;
 
     background: var(--white);
 
@@ -1167,12 +1125,10 @@ img {
 
 .schedule-label {
     display: block;
-
     color: var(--blue);
-
     font-family: "Nunito", sans-serif;
-    font-size: 14px;
     font-weight: 900;
+    font-size: 17px;
 }
 
 .schedule-row small {
@@ -1181,7 +1137,7 @@ img {
     margin-top: 3px;
 
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--fs-label);
 }
 
 .schedule-row strong {
@@ -1189,7 +1145,7 @@ img {
 
     text-align: right;
 
-    font-size: 11px;
+    font-size: var(--fs-label);
     line-height: 1.5;
 }
 
@@ -1215,7 +1171,7 @@ img {
     background: var(--white);
 
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius);
 
     transition: 0.2s ease;
 }
@@ -1229,7 +1185,7 @@ img {
 .branch-card > span {
     color: var(--orange);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
     font-weight: 900;
     letter-spacing: 2px;
 }
@@ -1241,7 +1197,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 22px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
 }
 
 .branch-card p {
@@ -1249,7 +1205,7 @@ img {
 
     color: var(--muted);
 
-    font-size: 11px;
+    font-size: var(--fs-label);
     line-height: 1.75;
 }
 
@@ -1262,7 +1218,7 @@ img {
     margin-top: 30px;
     padding: 30px 34px;
 
-    border-radius: 15px;
+    border-radius: var(--radius);
     background: var(--blue-light);
 }
 
@@ -1272,7 +1228,7 @@ img {
     color: var(--blue);
     font-family: "Nunito", sans-serif;
     font-size: 25px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
 }
 
 .branch-booking p {
@@ -1287,7 +1243,7 @@ img {
 ========================================================= */
 
 .leadership-section {
-    padding: 100px 0;
+    padding: var(--section-y) 0;
 
     background: var(--blue-dark);
     color: var(--white);
@@ -1316,7 +1272,7 @@ img {
     text-align: center;
 
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 13px;
+    border-radius: var(--radius);
 
     background: rgba(255, 255, 255, 0.025);
 }
@@ -1352,7 +1308,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 18px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
 }
 
 .leader-card > span {
@@ -1362,7 +1318,7 @@ img {
 
     color: var(--yellow);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -1383,7 +1339,7 @@ img {
     padding: 35px;
 
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 13px;
+    border-radius: var(--radius);
 
     background: rgba(255, 255, 255, 0.025);
 }
@@ -1399,18 +1355,16 @@ img {
 .vision-card small {
     color: var(--orange);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
     font-weight: 900;
     letter-spacing: 2px;
 }
 
 .vision-card p {
     margin-top: 13px;
-
     color: rgba(255, 255, 255, 0.66);
-
-    font-size: 13px;
     line-height: 1.9;
+    font-size: 16px;
 }
 
 
@@ -1446,10 +1400,10 @@ img {
     margin: -8px 0 0;
     padding: 8px 12px;
 
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
 
     background: var(--orange-light);
-    color: var(--orange-dark);
+    color: var(--orange-ink);
 
     font-size: 12px;
 }
@@ -1529,7 +1483,7 @@ img {
 .branch-photos {
     align-self: flex-start;
     margin-top: auto;
-    padding: 20px 0 0;
+    padding: var(--space-1) 0 0;
 
     border: 0;
     background: none;
@@ -1540,6 +1494,9 @@ img {
     font-weight: 700;
 
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
 }
 
 .branch-photos {
@@ -1602,7 +1559,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 22px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
 }
 
 .popup-close,
@@ -1647,10 +1604,10 @@ img {
 .popup-body .program-note {
     padding: 8px 12px;
 
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
 
     background: var(--orange-light);
-    color: var(--orange-dark);
+    color: var(--orange-ink);
 
     font-size: 13px;
 }
@@ -1671,7 +1628,7 @@ img {
     max-height: calc(100dvh - 210px);
     object-fit: contain;
 
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
 }
 
 .popup-gallery .popup-body .popup-caption {
@@ -1737,7 +1694,7 @@ img {
     background: var(--white);
 
     border: 1px solid var(--border);
-    border-radius: 15px;
+    border-radius: var(--radius);
 
     box-shadow: 0 4px 15px rgba(18, 59, 142, 0.025);
 }
@@ -1745,7 +1702,7 @@ img {
 .investment-number {
     color: var(--orange);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
     font-weight: 900;
     letter-spacing: 2px;
 }
@@ -1759,7 +1716,7 @@ img {
 
     font-family: "Nunito", sans-serif;
     font-size: 25px;
-    font-weight: 900;
+    font-weight: var(--fw-title);
     line-height: 1.15;
 }
 
@@ -1781,7 +1738,7 @@ img {
     color: var(--muted);
 
     font-family: "DM Sans", sans-serif;
-    font-size: 10px;
+    font-size: var(--fs-label);
     font-weight: 600;
 }
 
@@ -1791,56 +1748,8 @@ img {
 
     color: var(--muted);
 
-    font-size: 11.5px;
+    font-size: var(--fs-label);
     line-height: 2;
-}
-
-.large-option-icon {
-    margin-top: 25px;
-    font-size: 43px;
-}
-
-.new-investment {
-    border: 2px solid var(--orange);
-}
-
-.new-tag {
-    position: absolute;
-
-    top: 24px;
-    right: 24px;
-
-    padding: 5px 8px;
-
-    border-radius: 5px;
-
-    background: var(--orange);
-    color: var(--white);
-
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: 1px;
-}
-
-.childcare-label {
-    margin-top: 19px;
-
-    color: var(--orange);
-
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 1px;
-}
-
-.new-investment > p {
-    max-width: 650px;
-
-    margin-top: 12px;
-
-    color: var(--muted);
-
-    font-size: 12px;
-    line-height: 1.75;
 }
 
 
@@ -1852,7 +1761,7 @@ img {
     position: relative;
     overflow: hidden;
 
-    padding: 105px 0;
+    padding: var(--section-y) 0;
 
     background: var(--blue);
     color: var(--white);
@@ -1903,10 +1812,10 @@ img {
     margin-top: 17px;
 
     font-family: "Nunito", sans-serif;
-    font-size: clamp(39px, 5vw, 61px);
-    font-weight: 900;
-    line-height: 1.07;
-    letter-spacing: -1.5px;
+    font-size: var(--fs-h2);
+    font-weight: var(--fw-heading);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
 }
 
 .final-cta h2 span {
@@ -1954,7 +1863,7 @@ img {
        so it works well against a light footer card. */
     padding: 8px;
 
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     background: var(--white);
 }
 
@@ -1965,7 +1874,7 @@ img {
 
     color: rgba(255, 255, 255, 0.48);
 
-    font-size: 11px;
+    font-size: var(--fs-label);
     line-height: 1.75;
 }
 
@@ -1974,7 +1883,7 @@ img {
 
     color: var(--white);
 
-    font-size: 10px;
+    font-size: var(--fs-label);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1.5px;
@@ -1987,7 +1896,7 @@ img {
 
     color: rgba(255, 255, 255, 0.48);
 
-    font-size: 11px;
+    font-size: var(--fs-label);
 
     transition: color 0.2s ease;
 }
@@ -1999,7 +1908,7 @@ img {
 .footer-column > p {
     color: rgba(255, 255, 255, 0.48);
 
-    font-size: 11px;
+    font-size: var(--fs-label);
 }
 
 .footer-book {
@@ -2010,7 +1919,7 @@ img {
 
     color: var(--orange);
 
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 900;
 }
 
@@ -2027,7 +1936,7 @@ img {
 
     color: rgba(255, 255, 255, 0.30);
 
-    font-size: 9px;
+    font-size: var(--fs-label);
 }
 
 
@@ -2049,7 +1958,7 @@ img {
     padding: 8px 17px 8px 9px;
 
     border: 1px solid rgba(255, 255, 255, 0.75);
-    border-radius: 32px;
+    border-radius: var(--radius-pill);
 
     background: var(--white);
     color: var(--blue);
@@ -2080,232 +1989,15 @@ img {
    CALENDLY MODAL
 ========================================================= */
 
-.modal {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: 18px;
-
-    opacity: 0;
-    visibility: hidden;
-
-    transition:
-        opacity 0.2s ease,
-        visibility 0.2s ease;
-}
-
-.modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.modal-overlay {
-    position: absolute;
-    inset: 0;
-
-    background: rgba(4, 17, 43, 0.78);
-
-    backdrop-filter: blur(6px);
-}
-
-.modal-dialog {
-    position: relative;
-    z-index: 2;
-
-    width: min(1050px, 100%);
-    max-height: 96vh;
-
-    overflow: hidden;
-
-    background: var(--white);
-
-    border-radius: 15px;
-
-    box-shadow: 0 30px 100px rgba(0, 0, 0, 0.35);
-
-    transform: translateY(20px) scale(0.98);
-
-    transition: transform 0.25s ease;
-}
-
-.modal.active .modal-dialog {
-    transform: translateY(0) scale(1);
-}
-
 #locationPickerModal.active {
     opacity: 1;
     visibility: visible;
-}
-
-.location-picker-dialog {
-    max-width: 560px;
-}
-
-.location-picker {
-    padding: 46px 42px 42px;
-}
-
-.location-picker > span {
-    color: var(--orange);
-    font-size: 12px;
-    font-weight: 900;
-    letter-spacing: 1.5px;
-}
-
-.location-picker h2 {
-    margin-top: 10px;
-    color: var(--blue);
-    font-family: "Nunito", sans-serif;
-    font-size: 34px;
-    font-weight: 900;
-}
-
-.location-picker > p {
-    margin-top: 6px;
-    color: var(--muted);
-    font-size: 16px;
-}
-
-.location-picker label {
-    display: block;
-    margin-top: 28px;
-    color: var(--blue);
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.location-picker select {
-    width: 100%;
-    min-height: 54px;
-    margin-top: 8px;
-    padding: 0 15px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--white);
-    color: var(--text);
-    font-size: 16px;
-}
-
-.location-picker .btn {
-    width: 100%;
-    margin-top: 22px;
-}
-
-.modal-close {
-    position: absolute;
-    z-index: 10;
-
-    top: 14px;
-    right: 16px;
-
-    width: 38px;
-    height: 38px;
-
-    border: 0;
-    border-radius: 50%;
-
-    background: rgba(255, 255, 255, 0.95);
-    color: var(--blue);
-
-    font-size: 26px;
-    line-height: 1;
-
-    box-shadow: 0 3px 15px rgba(0, 0, 0, 0.10);
-}
-
-.modal-close:hover {
-    background: var(--orange);
-    color: var(--white);
-}
-
-.modal-heading {
-    padding: 27px 38px 18px;
-}
-
-.modal-heading > span {
-    color: var(--orange);
-
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 2px;
-}
-
-.modal-heading h2 {
-    margin-top: 4px;
-
-    color: var(--blue);
-
-    font-family: "Nunito", sans-serif;
-    font-size: 28px;
-    font-weight: 900;
-}
-
-.modal-heading p {
-    margin-top: 3px;
-
-    color: var(--muted);
-
-    font-size: 11px;
-}
-
-.calendly-frame-wrap {
-    position: relative;
-    height: 700px;
-    overflow: auto;
-}
-
-.calendly-loader {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 14px;
-
-    background: var(--white);
-    color: var(--blue);
-
-    font-size: 16px;
-    font-weight: 800;
-    text-align: center;
-}
-
-.calendly-loader:not(.active) {
-    display: none;
-}
-
-.loader-spinner {
-    width: 34px;
-    height: 34px;
-
-    border: 4px solid var(--blue-light);
-    border-top-color: var(--orange);
-    border-radius: 50%;
-
-    animation: loader-spin 0.8s linear infinite;
 }
 
 @keyframes loader-spin {
     to {
         transform: rotate(360deg);
     }
-}
-
-.calendly-frame-wrap iframe {
-    display: block;
-
-    width: 100%;
-    height: 700px;
-
-    border: 0;
 }
 
 
@@ -2320,16 +2012,13 @@ img {
     }
 
     .desktop-nav a {
-        font-size: 11px;
+        font-size: var(--fs-label);
     }
 
     .hero-grid {
         gap: 45px;
     }
 
-    .hero h1 {
-        font-size: 55px;
-    }
 
     .online-top {
         gap: 55px;
@@ -2354,18 +2043,18 @@ img {
 ========================================================= */
 
 @media (max-width: 780px) {
+    /* Phones: drop decorative shapes so the hero is compact. */
+    .color-orbit,
+    .hero-shape,
+    .hero-dots {
+        display: none;
+    }
+
 
     .container {
         width: min(100% - 28px, var(--container));
     }
 
-    .nav-wrap {
-        min-height: 70px;
-    }
-
-    .brand img {
-        width: 128px;
-    }
 
     .desktop-nav,
     .nav-cta {
@@ -2419,19 +2108,12 @@ img {
         margin-top: 15px;
     }
 
-    .hero {
-        padding: 65px 0;
-    }
 
     .hero-grid {
         grid-template-columns: 1fr;
         gap: 45px;
     }
 
-    .hero h1 {
-        font-size: 47px;
-        letter-spacing: -1.6px;
-    }
 
     .hero-copy > p {
         font-size: 14px;
@@ -2447,19 +2129,16 @@ img {
     }
 
     .hero-visual {
-        min-height: 500px;
+        min-height: auto;
     }
 
     .hero-card {
         width: 100%;
-        min-height: 450px;
+        min-height: auto;
 
-        padding: 35px;
+        padding: var(--space-4);
     }
 
-    .hero-card h2 {
-        font-size: 34px;
-    }
 
     .stats-grid {
         grid-template-columns: 1fr 1fr;
@@ -2481,18 +2160,12 @@ img {
         padding-left: 0;
     }
 
-    .section {
-        padding: 75px 0;
-    }
 
     .about-grid {
         grid-template-columns: 1fr;
         gap: 30px;
     }
 
-    .online-section {
-        padding: 75px 0;
-    }
 
     .online-top {
         grid-template-columns: 1fr;
@@ -2575,19 +2248,11 @@ img {
         height: 38px;
     }
 
-    .hero h1 {
-        font-size: 41px;
-    }
 
     .hero-card {
-        min-height: 430px;
-        padding: 30px;
-        border-radius: 22px;
+        padding: var(--space-3);
     }
 
-    .hero-card h2 {
-        font-size: 30px;
-    }
 
     .hero-card-icon {
         margin-top: 28px;
@@ -2636,176 +2301,84 @@ img {
     .schedule-row {
         align-items: flex-start;
     }
-
-    .modal {
-        padding: 7px;
-    }
-
-    .modal-dialog {
-        max-height: 98vh;
-        border-radius: 11px;
-    }
-
-    .modal-heading {
-        padding: 22px 18px 14px;
-    }
-
-    .modal-heading h2 {
-        font-size: 24px;
-    }
-
-    .location-picker {
-        padding: 42px 22px 26px;
-    }
-
-    .location-picker h2 {
-        font-size: 28px;
-    }
-
-    .calendly-frame-wrap,
-    .calendly-frame-wrap iframe {
-        height: 680px;
-    }
 }
 
 
 /* =========================================================
-   READABILITY PASS
+   TYPE SCALE (sizes come from the tokens in :root)
 ========================================================= */
-
-body {
-    font-size: 17px;
-}
-
-.desktop-nav a {
-    font-size: 14px;
-}
-
-.btn {
-    font-size: 15px;
-}
-
-.eyebrow,
-.section-kicker {
-    font-size: 12px;
-    letter-spacing: 1.5px;
-}
 
 .hero-copy > p,
 .about-content > p {
-    font-size: 18px;
+    font-size: var(--fs-lead);
     line-height: 1.75;
-}
-
-.hero-info {
-    font-size: 14px;
-}
-
-.new-pill {
-    font-size: 11px;
-}
-
-.hero-card > p {
-    font-size: 16px;
-    line-height: 1.65;
-}
-
-.mini-features div {
-    font-size: 15px;
-}
-
-.card-cta {
-    font-size: 15px;
-}
-
-.stat strong {
-    font-size: 22px;
+    max-width: var(--measure);
 }
 
 .stat span,
 .section-number {
-    font-size: 13px;
+    font-size: var(--fs-meta);
 }
 
 .mission-box p,
 .online-top > p,
 .schedule-description,
 .investment-heading > p {
-    font-size: 16px;
+    font-size: var(--fs-body);
 }
 
 .online-card p,
 .program-card p,
-.branch-card p,
-.new-investment > p {
-    font-size: 15px;
+.branch-card p {
+    font-size: var(--fs-card);
     line-height: 1.7;
 }
 
 .card-number,
 .branch-card > span,
-.investment-number,
-.childcare-label {
-    font-size: 12px;
-    letter-spacing: 1.5px;
+.investment-number {
+    font-size: var(--fs-label);
+    letter-spacing: 0.12em;
 }
 
 .online-card h3,
 .program-card h3,
 .branch-card h3 {
-    font-size: 24px;
-}
-
-.online-cta span {
-    font-size: 14px;
-}
-
-.schedule-label {
-    font-size: 17px;
+    font-size: var(--fs-h3);
 }
 
 .schedule-row small,
 .schedule-row strong {
-    font-size: 14px;
+    font-size: var(--fs-small);
 }
 
 .leader-card > span,
 .leader-card p,
 .vision-card small,
 .investment-card ul,
-.rate small,
-.new-tag {
-    font-size: 13px;
-}
-
-.vision-card p {
-    font-size: 16px;
+.rate small {
+    font-size: var(--fs-meta);
 }
 
 .footer-brand p,
 .footer-column a,
 .footer-column > p,
 .footer-book {
-    font-size: 14px;
+    font-size: var(--fs-small);
 }
 
 .footer-column h4,
 .footer-bottom {
-    font-size: 12px;
-}
-
-.modal-heading > span,
-.modal-heading p {
-    font-size: 13px;
+    font-size: var(--fs-label);
 }
 
 @media (max-width: 780px) {
     .mobile-nav a {
-        font-size: 16px;
+        font-size: var(--fs-body);
     }
 
     .hero-copy > p,
     .about-content > p {
-        font-size: 17px;
+        font-size: var(--fs-body);
     }
 }
