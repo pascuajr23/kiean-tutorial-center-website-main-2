@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Sign in | KieAn Tutorial Center</title>
+  <link rel="icon" href="assets/kiean-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..900&amp;family=Nunito:wght@700..900&amp;display=swap">
+  <link rel="stylesheet" href="style.css?v=20261105-12">
+  <link rel="stylesheet" href="admin.css?v=20261105-12">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261105-12">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a>
+  </header>
+  <main class="admin-main login-main">
+    <section class="login-card" aria-labelledby="login-title">
+      <span class="admin-kicker">CENTER OPERATIONS</span>
+      <h1 id="login-title">Sign in</h1>
+      <p>Manage teacher schedules, bookings and the center's Google account.</p>
+      <!--ERROR-->
+      <form class="login-form" method="post" action="/api/admin/login">
+        <label class="admin-field">Username<input name="username" type="text" autocomplete="username" required maxlength="200" autofocus></label>
+        <label class="admin-field">Password<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+        <button class="button button-primary" type="submit">Sign in</button>
+      </form>
+      <p class="login-note">For KieAn staff only. Your session ends after 8 hours or when you sign out.</p>
+    </section>
+  </main>
+</body>
+</html>

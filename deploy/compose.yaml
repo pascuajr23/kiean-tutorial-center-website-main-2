@@ -4,6 +4,7 @@ services:
   kiean:
     image: ghcr.io/pascuajr23/kiean-tutorial-center-website-main-2:main
     restart: unless-stopped
+    init: true
     env_file:
       - ./kiean.env
     environment:
