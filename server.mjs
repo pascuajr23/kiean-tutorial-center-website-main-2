@@ -1,18 +1,19 @@
 import http from 'node:http';
-import {chmod,readFile,rename,unlink,writeFile} from 'node:fs/promises';
+import {chmod,mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import {resolve,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
-import {loadConfig,publicConfig,validateTeacherRoster} from './lib/config.mjs';
+import {loadConfig,publicConfig,validateTeacherRoster,validateBranches,validatePrograms,validateGalleries} from './lib/config.mjs';
+import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './shared.mjs';
 import {GoogleCalendar} from './lib/calendar.mjs';
 import {GoogleOAuth,CENTER_SCOPES} from './lib/google-oauth.mjs';
 import {GmailMailer,CENTER_ID} from './lib/mailer.mjs';
 import {BookingStore} from './lib/store.mjs';
 import {BookingService} from './lib/booking-service.mjs';
-import {BookingError} from './lib/domain.mjs';
+import {BookingError,validateAttachments} from './lib/domain.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
-const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
-const PUBLIC=new Set(['index.html','booking.html','style.css','booking.css','site.js','booking.js','shared.mjs','admin.css','admin-responsive.css','admin.js']);
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
+const PUBLIC=new Set(['index.html','booking.html','faq.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','admin.css','admin-responsive.css','admin.js']);
 function hasAdminCredentials(req,credentials){
   if(!credentials?.username||!credentials?.password)return false;
   const match=req.headers.authorization?.match(/^Basic\s+([A-Za-z0-9+/=]+)$/i);
@@ -23,21 +24,37 @@ function hasAdminCredentials(req,credentials){
   const expectedUsername=Buffer.from(credentials.username),expectedPassword=Buffer.from(credentials.password);
   return username.length===expectedUsername.length&&password.length===expectedPassword.length&&timingSafeEqual(username,expectedUsername)&&timingSafeEqual(password,expectedPassword);
 }
-function challengeAdmin(res){res.writeHead(401,{'WWW-Authenticate':'Basic realm="KieAn Admin", charset="UTF-8"','Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});res.end('Sign in to manage teacher bookings.');}
-export function createApp({config,service,store,oauth,calendar,adminCredentials={username:process.env.KIEAN_ADMIN_USER,password:process.env.KIEAN_ADMIN_PASSWORD},configPath}={}){
+// Compare secrets in constant time; a length mismatch still compares against itself so timing stays flat.
+function sameSecret(given,expected){const a=Buffer.from(String(given??'')),b=Buffer.from(String(expected));return timingSafeEqual(a.length===b.length?a:b,b)&&a.length===b.length;}
+const SESSION_MS=8*3600000;
+export function createApp({config,service,store,oauth,calendar,adminCredentials={username:process.env.KIEAN_ADMIN_USER,password:process.env.KIEAN_ADMIN_PASSWORD},configPath,photosDir=resolve(process.env.KIEAN_DATA_DIR||'data','branch-photos')}={}){
+  // Configs built without programs (tests, older files) use the defaults; the live list is module state in shared.mjs.
+  config.programs??=structuredClone(DEFAULT_PROGRAMS);setPrograms(config.programs);
   const rate=new Map();
   const oauthStates=new Map();
-  const timer=setInterval(()=>{for(const [ip,r]of rate)if(Date.now()-r.since>3600000)rate.delete(ip);},60000);timer.unref();
+  // shortcut: admin sessions live in memory, so a server restart signs staff out; move to SQLite if that matters.
+  const sessions=new Map();
+  const sessionOf=req=>{const token=req.headers.cookie?.match(/(?:^|;\s*)kiean_admin=([A-Za-z0-9_-]{43})(?:;|$)/)?.[1];if(!token)return null;if(sessions.get(token)>Date.now())return token;sessions.delete(token);return null;};
+  // Signed in through the sign-in page (cookie), or Basic auth for scripts and tests.
+  const isAdmin=req=>Boolean(sessionOf(req))||hasAdminCredentials(req,adminCredentials);
+  const cookieFlags=`Path=/; HttpOnly; SameSite=Strict${config?.publicOrigin?.startsWith('https:')?'; Secure':''}`;
+  const timer=setInterval(()=>{for(const [ip,r]of rate)if(Date.now()-r.since>3600000)rate.delete(ip);for(const [t,exp]of sessions)if(exp<=Date.now())sessions.delete(t);},60000);timer.unref();
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Cache-Control','no-store');
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://nominatim.openstreetmap.org; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
     const json=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));};
     try{
       const url=new URL(req.url,'http://localhost');
+      // Container health check: no database work, no rate limit.
+      if(url.pathname==='/healthz'){res.writeHead(200,{'Content-Type':'text/plain','Cache-Control':'no-store'});res.end('ok');return;}
       if(url.pathname==='/admin'){
         if(!['GET','HEAD'].includes(req.method))throw new BookingError('Method not allowed.',405);
         if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
-        if(!hasAdminCredentials(req,adminCredentials)){challengeAdmin(res);return;}
+        if(!isAdmin(req)){
+          // Fixed message only (never echo request input into the page).
+          const page=(await readFile(resolve(root,'admin-login.html'),'utf8')).replace('<!--ERROR-->',url.searchParams.get('error')==='1'?'<p class="admin-message" data-kind="error" role="alert">That username or password is not right. Please try again.</p>':url.searchParams.get('signedout')==='1'?'<p class="admin-message" data-kind="success" role="status">You have signed out.</p>':'');
+          res.writeHead(401,{'Content-Type':'text/html; charset=utf-8'});res.end(req.method==='HEAD'?undefined:page);return;
+        }
         if(config.preview)throw new BookingError('Teacher management is available only in live mode.',503);
         const page=await readFile(resolve(root,'admin.html'));res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(req.method==='HEAD'?undefined:page);return;
       }
@@ -46,35 +63,112 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         const ip=process.env.TRUST_PROXY==='1'?(req.headers['x-forwarded-for']?.split(',').at(-1)?.trim()||req.socket.remoteAddress):req.socket.remoteAddress;
         const now=Date.now();let bucket=rate.get(ip);if(!bucket||now-bucket.since>3600000){bucket={since:now,reads:0,writes:0};rate.set(ip,bucket);}
         const field=req.method==='POST'?'writes':'reads';bucket[field]++;
-        // Signed-in admins save rosters repeatedly; only anonymous traffic and failed sign-ins count toward the limit.
-        if(url.pathname==='/api/admin/teachers'&&hasAdminCredentials(req,adminCredentials))bucket[field]--;
+        // Signed-in admins save settings repeatedly; only anonymous traffic and sign-in attempts count toward the limit.
+        if(url.pathname.startsWith('/api/admin/')&&url.pathname!=='/api/admin/login'&&isAdmin(req))bucket[field]--;
         else if(bucket[field]>(field==='writes'?10:600))throw new BookingError('Too many requests. Please wait before trying again.',429);
-        if(url.pathname==='/api/admin/teachers'){
+        if(req.method==='POST'&&(url.pathname==='/api/admin/login'||url.pathname==='/api/admin/logout')){
+          if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
+          if(req.headers.origin!==config.publicOrigin)throw new BookingError('Sign in from the KieAn website.',403);
+          if(url.pathname==='/api/admin/logout'){
+            const token=sessionOf(req);if(token)sessions.delete(token);
+            res.writeHead(303,{'Location':'/admin?signedout=1','Set-Cookie':`kiean_admin=; ${cookieFlags}; Max-Age=0`});res.end();return;
+          }
+          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>2000)throw new BookingError('Sign-in details are too long.',413);chunks.push(chunk);}
+          const form=new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+          // Check both fields every time (bitwise &) so a wrong username takes as long as a wrong password.
+          if(sameSecret(form.get('username'),adminCredentials.username)&sameSecret(form.get('password'),adminCredentials.password)){
+            const token=randomBytes(32).toString('base64url');sessions.set(token,Date.now()+SESSION_MS);
+            res.writeHead(303,{'Location':'/admin','Set-Cookie':`kiean_admin=${token}; ${cookieFlags}; Max-Age=${SESSION_MS/1000}`});res.end();return;
+          }
+          res.writeHead(303,{'Location':'/admin?error=1'});res.end();return;
+        }
+        const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/branch-photos';
+        if(adminApi){
           if(config.preview)throw new BookingError('Teacher management is available only in live mode.',503);
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
-          if(!hasAdminCredentials(req,adminCredentials)){challengeAdmin(res);return;}
-          if(req.method==='GET'){
-            json(200,{teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))})),center:{email:config.centerEmail||null,connected:Boolean(store?.hasGoogleToken(CENTER_ID))}});return;
-          }
-          if(req.headers.origin!==config.publicOrigin)throw new BookingError('Teacher settings must be saved from the KieAn website.',403);
+          if(!isAdmin(req))throw new BookingError('Your admin session has ended. Please sign in again.',401);
+          if(req.method==='POST'&&req.headers.origin!==config.publicOrigin)throw new BookingError('Settings must be saved from the KieAn website.',403);
+        }
+        const readJson=async limit=>{
           if(!req.headers['content-type']?.startsWith('application/json'))throw new BookingError('JSON is required.',415);
-          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>100000)throw new BookingError('Teacher roster is too large.',413);chunks.push(chunk);}
-          let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid teacher roster.');}
-          if(!Array.isArray(body?.teachers))throw new BookingError('A teacher list is required.');
-          let teachers;try{teachers=validateTeacherRoster(body.teachers.map(({id,name,bio,googleEmail,available,programs,branches,weekly,blackoutDates})=>({id,name,bio,googleEmail,available,programs,branches,weekly,blackoutDates})));}catch(error){throw new BookingError(error.message);}
-          const nextById=new Map(teachers.map(t=>[t.id,t]));
-          for(const current of config.teachers){
-            const next=nextById.get(current.id);
-            if(!next)throw new BookingError('Existing teacher records cannot be removed. Turn off booking availability instead.',409);
-            const linked=store?.googleToken(current.id);
-            if(linked&&linked.email!==next.googleEmail.toLowerCase())throw new BookingError('A connected teacher Google email cannot be changed. Reconnect or contact support first.',409);
-          }
+          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>limit)throw new BookingError('The upload is too large.',413);chunks.push(chunk);}
+          try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid data.');}
+        };
+        // Save config.json atomically (write a temp file, then rename) so a crash never leaves it half-written.
+        const saveConfig=async changes=>{
           const file=config.configFile||configPath;
           if(!file)throw new BookingError('The live configuration file path is unavailable.',503);
-          const persisted={...config,teachers};delete persisted.preview;delete persisted.port;delete persisted.configFile;
+          const persisted={...config,...changes};delete persisted.preview;delete persisted.port;delete persisted.configFile;
           const temporary=`${file}.${randomUUID()}.tmp`;
           try{await writeFile(temporary,JSON.stringify(persisted,null,2)+'\n',{flag:'wx',mode:0o600});await chmod(temporary,0o600);await rename(temporary,file);}
           catch(error){await unlink(temporary).catch(()=>{});throw error;}
+          Object.assign(config,changes);
+        };
+        // Deleting is a deliberate second step: the saved item must already be disabled, only one goes per save,
+        // and the request must carry its exact name as typed by the admin. Anything else is refused.
+        const checkRemoval=(kind,current,next,remove)=>{
+          const ids=new Set(next.map(x=>x.id)),removed=current.filter(x=>!ids.has(x.id));
+          if(!removed.length)return null;
+          if(removed.length>1)throw new BookingError(`Delete one ${kind} at a time.`,409);
+          const [item]=removed;
+          if(item.available!==false)throw new BookingError(`${item.name} is still accepting bookings. Turn off “Accepting bookings” and save first; only disabled ${kind}s can be deleted.`,409);
+          if(typeof remove?.id!=='string'||remove.id!==item.id||remove.name!==item.name)throw new BookingError(`To delete ${item.name}, type its exact name.`,409);
+          return item;
+        };
+        if(url.pathname==='/api/admin/branches'){
+          if(req.method==='GET'){json(200,{branches:config.branches});return;}
+          const body=await readJson(200000);
+          let branches;try{branches=validateBranches(body?.branches);}catch(error){throw new BookingError(error.message);}
+          const gone=checkRemoval('location',config.branches,branches,body.remove);
+          if(gone&&config.teachers.some(t=>t.branches.includes(gone.id)))throw new BookingError(`${gone.name} still has teachers. Move them to another location first.`,409);
+          await saveConfig({branches});json(200,{branches});return;
+        }
+        if(url.pathname==='/api/admin/programs'){
+          if(req.method==='GET'){json(200,{programs:config.programs});return;}
+          const body=await readJson(300000);
+          let programs;try{programs=validatePrograms(body?.programs,config.programs);}catch(error){throw new BookingError(error.message);}
+          const gone=checkRemoval('program',config.programs,programs,body.remove);
+          if(gone&&(config.branches.some(b=>b.programs.includes(gone.id))||config.teachers.some(t=>t.programs.includes(gone.id)||Object.values(t.weekly).flat().some(range=>range[2]===gone.id))))throw new BookingError(`${gone.name} is still offered by a teacher or location. Remove it there first.`,409);
+          // Teachers and locations must still be valid with the new list before it replaces the live one.
+          setPrograms(programs);
+          try{validateBranches(config.branches);validateTeacherRoster(structuredClone(config.teachers),config.branches);await saveConfig({programs});}
+          catch(error){setPrograms(config.programs);throw error instanceof BookingError||!error.code?new BookingError(error.message,409):error;}
+          json(200,{programs});return;
+        }
+        if(url.pathname==='/api/admin/galleries'){
+          if(req.method==='GET'){json(200,{galleries:config.galleries||DEFAULT_GALLERIES});return;}
+          const body=await readJson(100000);
+          let galleries;try{galleries=validateGalleries(body?.galleries);}catch(error){throw new BookingError(error.message);}
+          await saveConfig({galleries});json(200,{galleries});return;
+        }
+        if(url.pathname==='/api/admin/branch-photos'&&req.method==='POST'){
+          // Same checks as booking attachments: real JPG/PNG/WebP, 5 MB at most (PDFs refused).
+          const body=await readJson(7500000);
+          let file;try{[file]=validateAttachments([{kind:'request',name:'photo',type:body?.type,data:body?.data}]);}catch(error){throw new BookingError(error.message,error.status);}
+          if(!file||file.type==='application/pdf')throw new BookingError('Photos must be JPG, PNG or WebP images.');
+          const name=`${randomBytes(12).toString('hex')}.${{'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type]}`;
+          await mkdir(photosDir,{recursive:true,mode:0o700});await writeFile(resolve(photosDir,name),file.data,{flag:'wx',mode:0o600});
+          json(200,{path:`branch-photos/${name}`});return;
+        }
+        if(url.pathname==='/api/admin/teachers'){
+          if(req.method==='GET'){
+            json(200,{programs:config.programs,galleries:config.galleries||DEFAULT_GALLERIES,branches:config.branches,teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))})),center:{email:config.centerEmail||null,connected:Boolean(store?.hasGoogleToken(CENTER_ID))}});return;
+          }
+          const body=await readJson(100000);
+          if(!Array.isArray(body?.teachers))throw new BookingError('A teacher list is required.');
+          let teachers;try{teachers=validateTeacherRoster(body.teachers.map(({id,name,bio,googleEmail,available,programs,branches,weekly,blackoutDates})=>({id,name,bio,googleEmail,available,programs,branches,weekly,blackoutDates})),config.branches);}catch(error){throw new BookingError(error.message);}
+          const nextById=new Map(teachers.map(t=>[t.id,t]));
+          const gone=checkRemoval('teacher',config.teachers,teachers,body.remove);
+          // Keep a teacher who still has upcoming sessions: their bookings and calendar events depend on the record.
+          if(gone&&store?.busy(gone.id,new Date().toISOString(),'9999-12-31T00:00:00.000Z').length)throw new BookingError(`${gone.name} still has upcoming sessions. Keep the teacher disabled until those sessions are over.`,409);
+          for(const current of config.teachers){
+            const next=nextById.get(current.id);
+            if(!next)continue;
+            const linked=store?.googleToken(current.id);
+            if(linked&&linked.email!==next.googleEmail.toLowerCase())throw new BookingError('A connected teacher Google email cannot be changed. Reconnect or contact support first.',409);
+          }
+          await saveConfig({teachers});
+          if(gone)store?.deleteGoogleToken(gone.id);
           config.teachers=teachers;json(200,{teachers:teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))}))});return;
         }
         if(req.method==='GET'&&url.pathname==='/api/config'){json(200,publicConfig(config,store));return;}
@@ -103,7 +197,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         if(req.method==='GET'&&(connect||connectCenter)){
           if(config.preview||!oauth||!store)throw new BookingError('Google Calendar connection is available only in live mode.',503);
           if(connectCenter){
-            if(!hasAdminCredentials(req,adminCredentials)){challengeAdmin(res);return;}
+            if(!isAdmin(req)){res.writeHead(303,{'Location':'/admin'});res.end();return;}
             if(!config.centerEmail)throw new BookingError('Set centerEmail in the configuration first.',503);
           }
           const teacher=connectCenter?{id:CENTER_ID}:config.teachers.find(t=>t.id===connect[1]);
@@ -129,10 +223,16 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       }
       if(!['GET','HEAD'].includes(req.method))throw new BookingError('Method not allowed.',405);
       // Clean page URLs: /booking serves booking.html; old .html addresses redirect permanently.
-      const PAGES={'':'index.html',booking:'booking.html'},CLEAN={'index.html':'/','booking.html':'/booking'};
+      const SLUGS=['booking','faq','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
+      const PAGES={'':'index.html',...Object.fromEntries(SLUGS.map(s=>[s,s+'.html']))},CLEAN={'index.html':'/',...Object.fromEntries(SLUGS.map(s=>[s+'.html','/'+s]))};
       const path=decodeURIComponent(url.pathname).replace(/^\//,'');
       if(CLEAN[path]){res.writeHead(301,{'Location':CLEAN[path]+url.search,'Cache-Control':'no-store'});res.end();return;}
       const name=PAGES[path]??path;
+      // Photos uploaded in /admin live in the data folder; random names, so they can be cached for good.
+      if(/^branch-photos\/[a-f0-9]{24}\.(jpg|png|webp)$/.test(name)){
+        const photo=await readFile(resolve(photosDir,name.slice('branch-photos/'.length)));
+        res.writeHead(200,{'Content-Type':types[extname(name)],'Cache-Control':'public, max-age=31536000, immutable'});res.end(req.method==='HEAD'?undefined:photo);return;
+      }
       // Serve explicit public files only. Never expose configuration, credentials or SQLite.
       if(!PUBLIC.has(name)&&!/^assets\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(name))throw new BookingError('Not found.',404);
       // Images can be cached for a week; CSS/JS linked with ?v= are versioned, so cache them long. Pages stay uncached.
@@ -140,6 +240,12 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       const content=await readFile(resolve(root,name));res.writeHead(200,{'Content-Type':types[extname(name)]||'application/octet-stream','Cache-Control':cache});res.end(req.method==='HEAD'?undefined:content);
     }catch(error){
       if(res.headersSent){res.end();return;}
+      // Unknown pages get the friendly 404 page; API callers keep JSON errors.
+      const missing=(error instanceof BookingError&&error.status===404)||error.code==='ENOENT';
+      if(missing&&!req.url.startsWith('/api/')&&['GET','HEAD'].includes(req.method)){
+        const page=await readFile(resolve(root,'404.html')).catch(()=>null);
+        if(page){res.writeHead(404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:page);return;}
+      }
       if(error instanceof BookingError)json(error.status,{error:error.message,...error.details});
       else if(error.code==='ENOENT')json(404,{error:'Not found.'});
       else {console.error('Request failed:',error.name,error.status||'internal');json(503,{error:'Booking is temporarily unavailable. Please try again or contact the center.'});}

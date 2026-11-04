@@ -7,33 +7,137 @@
   <title>Teacher availability | KieAn Tutorial Center</title>
   <link rel="icon" href="assets/kiean-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..900&amp;family=Nunito:wght@700..900&amp;display=swap">
-  <link rel="stylesheet" href="style.css?v=20261028-18">
-  <link rel="stylesheet" href="admin.css?v=20261028-18">
-  <link rel="stylesheet" href="admin-responsive.css?v=20261028-18">
+  <link rel="stylesheet" href="style.css?v=20261105-12">
+  <link rel="stylesheet" href="admin.css?v=20261105-12">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261105-12">
 </head>
 <body class="admin-page">
   <header class="admin-header">
     <a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a>
+    <form class="signout-form" method="post" action="/api/admin/logout"><button class="button button-secondary" type="submit">Sign out</button></form>
   </header>
   <main class="admin-main">
+    <div id="admin-message" class="admin-message" role="status" aria-live="polite">Loading teacher roster…</div>
+    <section id="view-home" class="admin-home" aria-labelledby="home-title">
+      <span class="admin-kicker">CENTER OPERATIONS</span><h1 id="home-title">What do you want to edit?</h1>
+      <nav class="admin-choices" aria-label="Admin sections">
+        <a class="admin-choice" href="#teachers"><span class="admin-choice-icon" aria-hidden="true">📚</span><strong>Teachers</strong><span>Schedules, programs, branches and Google Calendar.</span></a>
+        <a class="admin-choice" href="#programs"><span class="admin-choice-icon" aria-hidden="true">🎒</span><strong>Programs</strong><span>Program details, prices, Kiddie Care rates and homepage cards.</span></a>
+        <a class="admin-choice" href="#locations"><span class="admin-choice-icon" aria-hidden="true">📍</span><strong>Locations</strong><span>Branch addresses, photos, programs and service areas.</span></a>
+      </nav>
+      <nav class="admin-choices admin-choices-small" aria-label="Homepage photos">
+        <a class="admin-choice" href="#permits"><span class="admin-choice-icon" aria-hidden="true">📜</span><strong>Permits</strong><span>Permit and registration photos on the homepage.</span></a>
+        <a class="admin-choice" href="#feedback"><span class="admin-choice-icon" aria-hidden="true">💬</span><strong>Feedback</strong><span>Parent feedback screenshots on the homepage.</span></a>
+      </nav>
+      <section class="center-account" aria-labelledby="center-title">
+      <div><h2 id="center-title">Admin Google account</h2><p>Sends booking emails and the online-lesson invitations with Google Meet links.</p></div>
+      <div class="center-account-status"><span id="center-state" class="connection-state" data-connected="false"><span class="connection-dot"></span><span>Checking…</span></span><a id="center-connect" class="button button-secondary" href="/api/center/google/connect">Connect</a></div>
+      </section>
+    </section>
+    <div id="view-teachers" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
     <div class="admin-heading">
       <div><span class="admin-kicker">CENTER OPERATIONS</span><h1>Teacher availability</h1><p>Roster settings for the public booking calendar.</p></div>
       <div class="roster-stats" aria-live="polite"><span><strong id="teacher-count">—</strong> teachers</span><span><strong id="bookable-count">—</strong> ready to book</span></div>
     </div>
-    <section class="center-account" aria-labelledby="center-title">
-      <div><h2 id="center-title">Center Google account</h2><p>Sends booking emails and the online-lesson invitations with Google Meet links.</p></div>
-      <div class="center-account-status"><span id="center-state" class="connection-state" data-connected="false"><span class="connection-dot"></span><span>Checking…</span></span><a id="center-connect" class="button button-secondary" href="/api/center/google/connect">Connect</a></div>
-    </section>
-    <div id="admin-message" class="admin-message" role="status" aria-live="polite">Loading teacher roster…</div>
     <form id="roster-form" hidden>
       <div id="teacher-list" class="teacher-list"></div>
       <div class="admin-actions">
         <button id="back-to-list" class="button button-secondary" type="button" hidden><span aria-hidden="true">←</span> All teachers</button>
-        <button id="add-teacher" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add teacher</button>
+        <span class="admin-actions-group"><button id="add-teacher" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add teacher</button><button id="add-portfolio" class="button button-secondary" type="button" hidden>Add portfolio teachers</button></span>
         <button id="save-roster" class="button button-primary" type="submit" hidden>Save teacher</button>
       </div>
     </form>
+    </div>
+    <div id="view-programs" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
+    <section class="locations" aria-labelledby="programs-title">
+      <div class="locations-head"><div><span class="admin-kicker">WEBSITE &amp; BOOKING</span><h2 id="programs-title">Programs</h2><p>Program cards on the homepage, in this order, and the programs parents can book, with their prices.</p></div><button id="add-program" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add program</button></div>
+      <div id="program-list" class="teacher-list teacher-overview"></div>
+    </section>
+    </div>
+    <div id="view-gallery" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
+    <section class="locations" aria-labelledby="gallery-title">
+      <div class="locations-head"><div><span class="admin-kicker">HOMEPAGE PHOTOS</span><h2 id="gallery-title">Permits</h2><p id="gallery-intro"></p></div><button id="gallery-add" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add photos</button><input id="gallery-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></div>
+      <small id="gallery-status" class="file-count" role="status" aria-live="polite"></small>
+      <ol id="gallery-list" class="gallery-admin"></ol>
+      <div class="admin-actions"><span class="delete-hint">JPG, PNG or WebP · 5 MB each · up to 30. Changes show on the homepage after you save.</span><button id="save-gallery" class="button button-primary" type="button">Save photos</button></div>
+    </section>
+    </div>
+    <div id="view-locations" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
+    <section class="locations" aria-labelledby="locations-title">
+      <div class="locations-head"><div><span class="admin-kicker">WEBSITE &amp; BOOKING</span><h2 id="locations-title">Locations</h2><p>Branches shown on the homepage and booking page: their address, photos, programs and the cities they serve.</p></div><button id="add-location" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add location</button></div>
+      <div id="location-list" class="teacher-list teacher-overview"></div>
+    </section>
+    </div>
   </main>
-  <script type="module" src="admin.js?v=20261028-18"></script>
+  <dialog id="location-editor" class="popup location-editor" aria-labelledby="location-editor-title">
+    <form id="location-form">
+      <div class="popup-head"><h2 id="location-editor-title">Location</h2><button class="popup-close" type="button" aria-label="Close">×</button></div>
+      <div class="popup-body">
+        <label class="admin-field">Location name<input name="name" required maxlength="80"></label>
+        <label class="admin-field">Address<textarea name="address" rows="2" maxlength="300"></textarea></label>
+        <label class="availability-switch"><input type="checkbox" name="available"> Accepting bookings</label>
+        <fieldset class="location-block"><legend>Programs offered</legend><div id="location-programs" class="choice-list"></div></fieldset>
+        <fieldset class="location-block"><legend>Service areas</legend><p class="selection-hint">Families in these cities can book this location. Online teachers based here serve the same cities.</p><div id="location-areas"></div></fieldset>
+        <fieldset class="location-block"><legend>Photos</legend><ul id="location-photos" class="photo-list"></ul><label class="file-field">Add photos <span>(JPG, PNG or WebP · 5 MB each · up to 12)</span><input id="location-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><small id="photo-status" class="file-count" aria-live="polite"></small></fieldset>
+      </div>
+      <div class="location-actions"><button id="delete-location" class="draft-remove" type="button">Delete location</button><small id="location-delete-hint" class="delete-hint">To delete, turn off “Accepting bookings” and save first.</small><button class="button button-primary" type="submit">Save location</button></div>
+    </form>
+  </dialog>
+  <dialog id="program-editor" class="popup location-editor" aria-labelledby="program-editor-title">
+    <form id="program-form">
+      <div class="popup-head"><h2 id="program-editor-title">Program</h2><button class="popup-close" type="button" aria-label="Close">×</button></div>
+      <div class="popup-body">
+        <label class="admin-field">Program name<input name="name" required minlength="2" maxlength="80"></label>
+        <label class="admin-field" id="program-kind-field">Type<select name="kind"><option value="tutorial">Face-to-face tutorial (one teacher, one-to-one lessons)</option><option value="class">Group class (shares a class period up to its class size)</option><option value="info">Homepage card only (not bookable)</option></select></label>
+        <p id="program-kind-text" class="selection-hint"></p>
+        <div class="choice-list"><label class="availability-switch" id="program-available-field"><input type="checkbox" name="available"> <span id="program-available-label">Accepting bookings</span></label><label class="availability-switch"><input type="checkbox" name="homepage"> Show on homepage</label></div>
+        <fieldset class="location-block" id="program-booking"><legend>Booking &amp; price</legend>
+          <div class="program-grid-fields">
+            <label class="admin-field" id="program-rate-field">Price per session (₱)<input name="rate" type="number" min="1" max="100000" step="1" placeholder="Blank = center confirms"></label>
+            <label class="admin-field">Minimum sessions<input name="minSessions" type="number" min="1" max="40" step="1" required></label>
+            <label class="admin-field">Maximum sessions<input name="maxSessions" type="number" min="1" max="40" step="1" placeholder="Up to 40"></label>
+            <label class="admin-field" id="program-lesson-field">Lesson minutes<input name="lessonMinutes" type="number" min="15" max="720" step="5" required></label>
+            <label class="admin-field" id="program-slot-field">Time blocked per session (minutes)<input name="slotMinutes" type="number" min="15" max="720" step="15" required></label>
+          </div>
+          <p class="selection-hint">Same minimum and maximum = a fixed enrollment (parents pick one start date). Time blocked includes any break after the lesson. Bookings start on the hour.</p>
+          <label class="admin-field">Booking page note<input name="note" maxlength="200" placeholder="e.g. Nursery to Grade 6 · One-to-one"></label>
+        </fieldset>
+        <fieldset class="location-block" id="program-care"><legend>Kiddie Care rates (₱) · blank = not offered</legend><div id="care-rates"></div>
+          <label class="admin-field">Care notes <span>(one per line · shown on booking and in emails)</span><textarea name="notes" rows="3"></textarea></label>
+        </fieldset>
+        <fieldset class="location-block"><legend>Homepage card</legend>
+          <div class="program-grid-fields">
+            <label class="admin-field">Icon (emoji)<input name="icon" maxlength="16"></label>
+            <label class="admin-field program-wide">Tagline<input name="tagline" maxlength="120"></label>
+          </div>
+          <label class="admin-field">Description<textarea name="description" rows="3" maxlength="600"></textarea></label>
+          <label class="admin-field">Details <span>(one per line)</span><textarea name="details" rows="3"></textarea></label>
+          <label class="admin-field">Price text <span>(homepage and booking page)</span><input name="price" maxlength="160" placeholder="e.g. ₱3,000 / 20 sessions"></label>
+          <label class="admin-field">Price note<input name="priceNote" maxlength="250" placeholder="e.g. San Pedro, Laguna: ₱5,000 / 20 sessions"></label>
+          <div class="program-grid-fields">
+            <label class="admin-field">Button text<input name="linkText" maxlength="60" placeholder="Book now →"></label>
+            <label class="admin-field" id="program-link-field">Button opens<select name="link"></select></label>
+          </div>
+        </fieldset>
+        <p id="program-status" class="file-count" role="status" aria-live="polite"></p>
+      </div>
+      <div class="location-actions"><button id="delete-program" class="draft-remove" type="button">Delete program</button><small id="program-delete-hint" class="delete-hint">To delete, turn it off and save first.</small><button class="button button-primary" type="submit">Save program</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" class="popup delete-dialog" aria-labelledby="delete-title">
+    <form method="dialog" id="delete-form">
+      <div class="popup-head"><h2 id="delete-title">Delete</h2><span id="delete-step" class="delete-step"></span></div>
+      <div class="popup-body">
+        <p id="delete-text"></p>
+        <label class="admin-field" id="delete-name-field" hidden><span id="delete-name-label"></span><input id="delete-name" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="location-actions"><button id="delete-cancel" class="button button-secondary" type="button">Cancel</button><button id="delete-next" class="button button-danger" type="submit">Continue</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="admin.js?v=20261105-12"></script>
 </body>
 </html>
