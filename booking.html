@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preload" href="/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="preload" href="/assets/fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin>
   <title>Book Tutorial Sessions | KieAn Tutorial Center</title>
   <meta name="description" content="Choose a KieAn teacher and book at least 5 online or 20 face-to-face tutorial sessions at the same time on your selected dates.">
   <meta name="robots" content="index, follow">
@@ -18,7 +19,7 @@
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_PH">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="assets/kiean-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..900&amp;family=Nunito:wght@700..900&amp;display=swap"><link rel="stylesheet" href="style.css?v=20261112-1"><link rel="stylesheet" href="booking.css?v=20261112-1">
+  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css?v=20261112-5"><link rel="stylesheet" href="booking.css?v=20261112-5">
 </head>
 <body class="booking-page">
   <header class="booking-header"><div class="container"><a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a><span class="timezone-label">Philippine Time · UTC+8</span></div></header>
@@ -29,8 +30,9 @@
     <div class="booking-layout">
       <div class="booking-workspace">
         <div id="error" class="form-error" role="alert" tabindex="-1" hidden></div>
-        <section id="step-1" class="step-panel" aria-labelledby="step-1-title">
+        <section id="step-1" class="step-panel is-loading" aria-labelledby="step-1-title" aria-busy="true">
           <div class="panel-title"><span class="step-eyebrow">STEP 01</span><h2 id="step-1-title" tabindex="-1">A teacher for your learner</h2><p>Tell us where you live, then pick a program and your preferred teacher.</p></div>
+          <div class="booking-skeleton" aria-hidden="true"><span class="sk sk-line"></span><span class="sk sk-field"></span><span class="sk sk-field"></span><span class="sk sk-card"></span><span class="sk sk-card"></span></div>
           <div class="area-field"><strong class="area-title">Where do you live?</strong><label>Province<select id="province" required><option value="">Choose your province</option></select></label><label>City or municipality<select id="area" required disabled><option value="">Choose your province first</option></select></label><button id="locate" type="button" class="btn btn-outline">Use my location</button><small id="area-status" aria-live="polite">Branches and teachers, including online teachers, are matched to the area where you live.</small></div>
           <div class="field-grid mode-field" data-needs-area hidden><label>How will your child learn?<select id="mode"><option value="online">Online tutorial (Google Meet)</option><option value="branch">Face to face at a branch</option></select></label></div>
           <div class="field-grid" data-needs-area hidden><label>Program<select id="program"></select></label><label id="branch-field" hidden>Branch<select id="branch"></select></label></div>
@@ -107,5 +109,5 @@
   <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/faq">FAQ</a><a href="/payment">How to Pay</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav></footer>
   <dialog id="submitting" class="popup submitting-popup" aria-labelledby="submitting-title"><div class="popup-body submitting-body"><span class="spinner" aria-hidden="true"></span><h2 id="submitting-title">Booking your sessions…</h2><p>We are checking your dates, adding them to the teacher’s Google Calendar and sending your emails. This can take up to a minute. Please keep this page open.</p></div></dialog>
   <a aria-label="Message KieAn on Facebook for more information" class="messenger-float" href="https://www.facebook.com/profile.php?id=61593257580081" rel="noopener noreferrer" target="_blank"><img alt="" src="assets/fbmes.webp" width="96" height="96" loading="lazy" decoding="async"><span>Send us a message</span></a>
-  <script type="module" src="booking.js?v=20261112-1"></script>
+  <script type="module" src="booking.js?v=20261112-5"></script>
 </body></html>

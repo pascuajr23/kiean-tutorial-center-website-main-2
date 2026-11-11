@@ -1,3 +1,9 @@
+/* Self-hosted fonts (DM Sans, Nunito; SIL Open Font License): no third-party requests before text can render. */
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 400 900; font-display: swap; src: url('/assets/fonts/dm-sans-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 400 900; font-display: swap; src: url('/assets/fonts/dm-sans-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 700 900; font-display: swap; src: url('/assets/fonts/nunito-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 700 900; font-display: swap; src: url('/assets/fonts/nunito-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
 /* =========================================================
    KIEAN TUTORIAL CENTER
    Brand-based responsive stylesheet
@@ -2525,3 +2531,29 @@ img {
 .pay-link { margin: 6px 0 12px; }
 .pay-link a { color: var(--blue); font-weight: 800; }
 @media (max-width: 640px) { .pay-steps { grid-template-columns: 1fr; } .qr-placeholder { width: 100%; max-width: 260px; } }
+a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font-weight: 800; }
+
+/* =========================================================
+   Loading skeletons (slow connections)
+   ========================================================= */
+@keyframes sk-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.sk,
+.date-grid.is-loading .date-cell:not(.selected),
+.gallery-item:not(:has(img.img-loaded)),
+.leader-photo:not(:has(img.img-loaded)),
+.popup-gallery .photo-frame:not(:has(img.img-loaded)) {
+    background: linear-gradient(100deg, #e8eef6 30%, #f7f9fc 50%, #e8eef6 70%) !important;
+    background-size: 300% 100% !important;
+    animation: sk-shimmer 1.4s linear infinite;
+}
+/* Photos letterboxed on white (permits) stay see-through until loaded, so the shimmer shows. */
+.permit-grid .gallery-item img:not(.img-loaded), .popup-gallery .photo-frame img:not(.img-loaded) { background: transparent !important; }
+.sk { display: block; border-radius: var(--radius-sm); }
+.sk-line { height: 14px; margin: 4px 0 14px; width: 40%; }
+.sk-field { height: 48px; margin-bottom: 12px; }
+.sk-card { height: 86px; margin-top: 14px; border-radius: var(--radius); }
+.sk-pill { display: inline-block; width: 160px; max-width: 46%; height: 44px; margin: 0 8px 8px 0; border-radius: 999px; }
+.step-panel.is-loading .area-field, .step-panel.is-loading .program-info, .step-panel:not(.is-loading) .booking-skeleton { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .sk, .date-grid.is-loading .date-cell, .gallery-item, .leader-photo, .popup-gallery .photo-frame { animation: none !important; }
+}
