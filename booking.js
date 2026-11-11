@@ -233,12 +233,12 @@ async function readAttachments(){
   return Promise.all(all.map(({file,kind})=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({kind,name:file.name,type:file.type,data:reader.result.split(',')[1]});reader.onerror=()=>reject(new Error(`${file.name} could not be read.`));reader.readAsDataURL(file);})));
 }
 function lockForm(lock){state.locked=lock;document.querySelectorAll('#booking-form input,#booking-form select,#booking-form textarea,#booking-form button').forEach(el=>el.disabled=lock);if(!lock){renderRequestFiles();syncSubmit();}}
-function syncSubmit(){$('submit-booking').disabled=state.locked||!$('booking-form').elements.consent.checked;}
+function syncSubmit(){const f=$('booking-form').elements;$('submit-booking').disabled=state.locked||!f.consent.checked||!f.privacyConsent.checked;}
 $('booking-form').addEventListener('input',()=>{if(!state.locked)state.requestId=crypto.randomUUID();});
 $('booking-form').addEventListener('submit',async event=>{
   event.preventDefault();if(state.locked)return;clearError();if(state.dates.length<minDates()||!state.time){showError(`Select at least ${minDates()} date${minDates()===1?'':'s'} and one shared time.`);return;}
   let attachments;try{attachments=await readAttachments();}catch(error){showError(error.message);return;}
-  const fields=Object.fromEntries(new FormData(event.target));const payload={...fields,consent:fields.consent==='on',teacher:state.teacher,program:state.program,branch:bookingBranch(),area:state.area,...(getProgram().care&&{care:state.care,needs:state.needs,plan:state.plan,tutorial:state.tutorial,hours:state.hours}),dates:state.dates,time:state.time,requestId:state.requestId,attachments};lockForm(true);$('submitting').showModal();$('submit-booking').textContent=state.preview?'Preparing preview…':'Checking dates and updating calendar…';
+  const fields=Object.fromEntries(new FormData(event.target));const payload={...fields,consent:fields.consent==='on',privacyConsent:fields.privacyConsent==='on',teacher:state.teacher,program:state.program,branch:bookingBranch(),area:state.area,...(getProgram().care&&{care:state.care,needs:state.needs,plan:state.plan,tutorial:state.tutorial,hours:state.hours}),dates:state.dates,time:state.time,requestId:state.requestId,attachments};lockForm(true);$('submitting').showModal();$('submit-booking').textContent=state.preview?'Preparing preview…':'Checking dates and updating calendar…';
   try{
     let result;
     if(state.preview){const p=getProgram();const rate=sessionRate(p.id,branchById(state.branches,bookingBranch()));result={id:state.requestId,reference:'PREVIEW ONLY',preview:true,online:p.mode==='online',rate,total:quote()?.total??(rate==null?null:rate*state.dates.length),paid:attachments.some(a=>a.kind==='receipt'),programName:p.name,lessonMinutes:getLength(),teacherName:getTeacher().name,time:state.time,sessions:state.dates.map(date=>({date,start:instant(date,state.time).toISOString(),end:new Date(instant(date,state.time).getTime()+getLength()*60000).toISOString()}))};}
@@ -260,7 +260,7 @@ function showConfirmation(b){
   const actions=node('div',undefined,'panel-actions');const download=node('button',b.preview?'Download preview calendar':'Download my calendar','btn btn-orange');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([icsForBooking(b)],{type:'text/calendar;charset=utf-8'}));const a=node('a');a.href=url;a.download=b.preview?'kiean-preview.ics':`kiean-${b.reference}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);});const again=node('a','Start a new booking','btn btn-outline');again.href='/booking';actions.append(download,again);panel.append(actions,node('p',b.preview?'Live booking opens after the center connects its teachers and calendars.':'Save this reference and quote it whenever you contact the center about payment or changes.'));panel.hidden=false;panel.focus();
 }
 $('submitting').addEventListener('cancel',e=>e.preventDefault());
-$('booking-form').elements.consent.addEventListener('change',syncSubmit);
+for(const name of ['consent','privacyConsent'])$('booking-form').elements[name].addEventListener('change',syncSubmit);
 $('booking-form').elements.notes.addEventListener('input',e=>{$('notes-count').textContent=`${e.target.value.length} / 350`;});
 $('mode').addEventListener('change',e=>{state.mode=e.target.value;state.teacher='';resetSchedule();renderPrograms();});
 $('program').addEventListener('change',e=>{state.program=e.target.value;state.teacher='';resetSchedule();renderPrograms();});$('branch').addEventListener('change',e=>{state.branch=e.target.value;state.teacher='';resetSchedule();renderPrograms();});

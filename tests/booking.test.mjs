@@ -9,20 +9,20 @@ import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
-import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL} from '../lib/mailer.mjs';
+import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig} from '../lib/config.mjs';
 import {createApp,clientIp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
-const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true});
+const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true,privacyConsent:true});
 function fakeCalendar(options={}){return {events:new Map(),creates:0,removes:0,async busy(){if(options.busyError)throw new Error('Offline');return options.busy||[];},async create(b,s){this.creates++;this.events.set(s.date,s);if(options.failAt===this.creates){const e=new Error('Write failed');if(!options.uncertain)e.status=400;throw e;}return {};},async remove(b,s){this.removes++;if(options.deleteError)throw new Error('Offline');this.events.delete(s.date);},invites:0,async createInvite(){this.invites++;return {hangoutLink:'https://meet.google.com/kie-ann-abc'};},async removeInvite(){this.invites--;}};}
 function harness(t,options={}){const store=new BookingStore(':memory:');t.after(()=>store.close());const calendar=fakeCalendar(options),service=new BookingService(config,store,calendar);return {store,calendar,service};}
 test('five Mon–Fri dates create five equal slots in Philippine Time',async t=>{
   const {service,calendar}=harness(t);const b=await service.book(payload(),NOW);assert.equal(b.sessions.length,5);assert.equal(calendar.events.size,5);assert.equal(b.sessions[0].start,'2030-06-03T02:00:00.000Z');assert.equal(b.sessions[0].end,'2030-06-03T03:00:00.000Z');assert.equal(b.lessonMinutes,50);
 });
 test('server enforces minimum, uniqueness, range, grade, consent and teacher hours',()=>{
-  for(const change of [{dates:payload().dates.slice(0,4)},{dates:Array(5).fill('2030-06-03')},{dates:['2030-02-30',...payload().dates.slice(1)]},{dates:['2030-06-02',...payload().dates.slice(1)]},{time:'17:00'},{time:'10:17'},{grade:'Grade 7'},{consent:false},{dates:[null,...payload().dates.slice(1)]},{dates:['2031-06-03',...payload().dates.slice(1)]},{teacher:'not-a-teacher'},{email:'invalid'}])assert.throws(()=>validateBooking({...payload(),...change},config,NOW));
+  for(const change of [{dates:payload().dates.slice(0,4)},{dates:Array(5).fill('2030-06-03')},{dates:['2030-02-30',...payload().dates.slice(1)]},{dates:['2030-06-02',...payload().dates.slice(1)]},{time:'17:00'},{time:'10:17'},{grade:'Grade 7'},{consent:false},{privacyConsent:false},{privacyConsent:undefined},{dates:[null,...payload().dates.slice(1)]},{dates:['2031-06-03',...payload().dates.slice(1)]},{teacher:'not-a-teacher'},{email:'invalid'}])assert.throws(()=>validateBooking({...payload(),...change},config,NOW));
 });
 test('online needs 5 sessions and face-to-face tutoring needs 20',()=>{
   for(const id of ['online','academic','after-school','sped']){
@@ -509,7 +509,7 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   const app=createApp({config:{...config,preview:true}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
   t.after(()=>new Promise(r=>app.close(r)));
   const base='http://127.0.0.1:'+app.address().port;
-  for(const slug of ['faq','payment','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
+  for(const slug of ['faq','payment','contact','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
     const r=await fetch(base+'/'+slug);assert.equal(r.status,200,slug);const html=await r.text();
     assert.match(html,new RegExp(`<link rel="canonical" href="https://kieantutorial.com/${slug}"`),slug);
     assert.match(html,/<meta (name="description" content="[^"]{50,}"|content="[^"]{50,}" name="description")/,slug);
@@ -517,7 +517,7 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   }
   const old=await fetch(base+'/privacy-policy.html',{redirect:'manual'});assert.equal(old.status,301);assert.equal(old.headers.get('location'),'/privacy-policy');
   const robots=await (await fetch(base+'/robots.txt')).text();assert.match(robots,/Disallow: \/admin/);assert.match(robots,/Sitemap: https:\/\/kieantutorial.com\/sitemap.xml/);
-  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,9);
+  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,10);
   const missing=await fetch(base+'/no-such-page');assert.equal(missing.status,404);assert.match(missing.headers.get('content-type'),/html/);const page=await missing.text();assert.match(page,/noindex/);assert.match(page,/We can’t find that page/);
   const api=await fetch(base+'/api/nothing');assert.equal(api.status,404);assert.match(api.headers.get('content-type'),/json/);
   assert.equal((await fetch(base+'/assets/og-image.png')).status,200);
@@ -582,4 +582,19 @@ test('admin sign-in: 10 wrong passwords lock that address out, by form or Author
 test('a leftover template placeholder for payment instructions never reaches parents',()=>{
   assert.equal(publicConfig({...config,paymentInstructions:'REPLACE with GCash / bank details, e.g. GCash: 09XX XXX XXXX'}).paymentInstructions,'');
   assert.equal(publicConfig({...config,paymentInstructions:'GCash 0917 000 0000 · KieAn Tutorial Center'}).paymentInstructions,'GCash 0917 000 0000 · KieAn Tutorial Center');
+});
+
+test('compliance: every public page and parent email identifies the business; bookings need separate privacy consent',async t=>{
+  const app=createApp({config:{...config,preview:true}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port;
+  for(const p of ['/','/booking','/faq','/payment','/contact','/privacy-policy','/terms','/refund-policy','/cookie-policy','/consent-form']){
+    const html=await (await fetch(base+p)).text();
+    assert.match(html,/DTI Business Name No\. 2828786/,p);assert.match(html,/Natania Homes/,p);assert.match(html,/kieanadmin@gmail\.com/,p);assert.match(html,/href="\/contact"/,p);
+  }
+  const privacy=await (await fetch(base+'/privacy-policy')).text();
+  assert.match(privacy,/Data Protection Officer is <strong>Kierlle B\. Piad<\/strong>/);assert.match(privacy,/sensitive personal information/);assert.match(privacy,/within 72 hours/);
+  const email=parentScheduleEmail({...validateBooking(payload(),config,NOW),id:'b1',reference:'KTC-TEST0002',paid:false});
+  assert(email.html.includes('DTI Business Name No. 2828786'));assert(email.text.includes(BUSINESS));
+  assert.throws(()=>validateBooking({...payload(),privacyConsent:false},config,NOW),/personal information/);
 });

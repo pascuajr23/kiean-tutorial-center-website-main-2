@@ -2557,3 +2557,16 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
 @media (prefers-reduced-motion: reduce) {
     .sk, .date-grid.is-loading .date-cell, .gallery-item, .leader-photo, .popup-gallery .photo-frame { animation: none !important; }
 }
+
+/* Business disclosure (Internet Transactions Act): registered name, DTI number, address, contact */
+.biz-line { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.biz-line a { color: inherit; text-decoration: underline; }
+/* Homepage footer: its own row under the copyright line, aligned to the footer content. */
+.footer .biz-line.container { margin: 12px auto 0; color: rgba(255, 255, 255, 0.42); font-size: var(--fs-label); }
+.booking-footer { flex-wrap: wrap; }
+.booking-footer .biz-line { flex-basis: 100%; margin: 2px 0 0; font-size: inherit; }
+.biz-list { display: grid; gap: 10px; margin: 6px 0 12px; }
+.biz-list div { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.biz-list dt { color: var(--muted); font-size: 13px; font-weight: 700; }
+.biz-list dd { margin: 0; color: var(--text); font-size: 15px; }
+@media (max-width: 640px) { .biz-list div { grid-template-columns: 1fr; gap: 2px; } }
