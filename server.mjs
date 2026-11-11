@@ -3,6 +3,7 @@ import {chmod,mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import {resolve,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
+import {BlockList,isIPv6} from 'node:net';
 import {loadConfig,publicConfig,validateTeacherRoster,validateBranches,validatePrograms,validateGalleries} from './lib/config.mjs';
 import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './shared.mjs';
 import {GoogleCalendar} from './lib/calendar.mjs';
@@ -12,7 +13,7 @@ import {BookingStore} from './lib/store.mjs';
 import {BookingService} from './lib/booking-service.mjs';
 import {BookingError,validateAttachments} from './lib/domain.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
-const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'};
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.xml':'application/xml; charset=utf-8'};
 const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','admin.css','admin-responsive.css','admin.js']);
 function hasAdminCredentials(req,credentials){
   if(!credentials?.username||!credentials?.password)return false;
@@ -27,6 +28,24 @@ function hasAdminCredentials(req,credentials){
 // Compare secrets in constant time; a length mismatch still compares against itself so timing stays flat.
 function sameSecret(given,expected){const a=Buffer.from(String(given??'')),b=Buffer.from(String(expected));return timingSafeEqual(a.length===b.length?a:b,b)&&a.length===b.length;}
 const SESSION_MS=8*3600000;
+// The visitor's address for rate limits and sign-in lockouts. Behind Cloudflare every request arrives from a Cloudflare
+// server, so TRUST_PROXY=cloudflare uses CF-Connecting-IP (lock the server's firewall to Cloudflare so it can't be faked).
+// TRUST_PROXY=1 uses the last X-Forwarded-For hop from a plain reverse proxy.
+// shortcut: Cloudflare's published ranges (cloudflare.com/ips, Nov 2026); refresh if Cloudflare announces new ones.
+const CLOUDFLARE=new BlockList();
+for(const cidr of ['173.245.48.0/20','103.21.244.0/22','103.22.200.0/22','103.31.4.0/22','141.101.64.0/18','108.162.192.0/18','190.93.240.0/20','188.114.96.0/20','197.234.240.0/22','198.41.128.0/17','162.158.0.0/15','104.16.0.0/13','104.24.0.0/14','172.64.0.0/13','131.0.72.0/22'])CLOUDFLARE.addSubnet(cidr.split('/')[0],Number(cidr.split('/')[1]),'ipv4');
+for(const cidr of ['2400:cb00::/32','2606:4700::/32','2803:f800::/32','2405:b500::/32','2405:8100::/32','2a06:98c0::/29','2c0f:f248::/32'])CLOUDFLARE.addSubnet(cidr.split('/')[0],Number(cidr.split('/')[1]),'ipv6');
+const plain=ip=>ip?.replace(/^::ffff:(?=\d+\.)/,'');
+const fromCloudflare=ip=>{ip=plain(ip);try{return Boolean(ip)&&CLOUDFLARE.check(ip,isIPv6(ip)?'ipv6':'ipv4');}catch{return false;}};
+export function clientIp(req,mode=process.env.TRUST_PROXY){
+  const socket=plain(req.socket.remoteAddress);
+  if(mode!=='1'&&mode!=='cloudflare')return socket;
+  // The address the reverse proxy (Caddy) saw is the last X-Forwarded-For hop.
+  const hop=plain(req.headers['x-forwarded-for']?.split(',').at(-1)?.trim())||socket;
+  // CF-Connecting-IP is trusted only when that hop really is Cloudflare, so a direct request cannot fake it.
+  if(mode==='cloudflare'&&fromCloudflare(hop))return req.headers['cf-connecting-ip']?.trim()||hop;
+  return hop;
+}
 export function createApp({config,service,store,oauth,calendar,adminCredentials={username:process.env.KIEAN_ADMIN_USER,password:process.env.KIEAN_ADMIN_PASSWORD},configPath,photosDir=resolve(process.env.KIEAN_DATA_DIR||'data','branch-photos')}={}){
   // Configs built without programs (tests, older files) use the defaults; the live list is module state in shared.mjs.
   config.programs??=structuredClone(DEFAULT_PROGRAMS);setPrograms(config.programs);
@@ -38,13 +57,22 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
   // Signed in through the sign-in page (cookie), or Basic auth for scripts and tests.
   const isAdmin=req=>Boolean(sessionOf(req))||hasAdminCredentials(req,adminCredentials);
   const cookieFlags=`Path=/; HttpOnly; SameSite=Strict${config?.publicOrigin?.startsWith('https:')?'; Secure':''}`;
-  const timer=setInterval(()=>{for(const [ip,r]of rate)if(Date.now()-r.since>3600000)rate.delete(ip);for(const [t,exp]of sessions)if(exp<=Date.now())sessions.delete(t);},60000);timer.unref();
+  // Failed admin sign-ins per address: {count, since}. Ten inside 15 minutes locks that address until the window ends.
+  const failures=new Map(),FAIL_WINDOW=15*60000,FAIL_LIMIT=10;
+  const lockedOut=ip=>{const f=failures.get(ip);if(f&&Date.now()-f.since>FAIL_WINDOW){failures.delete(ip);return false;}return Boolean(f&&f.count>=FAIL_LIMIT);};
+  const noteFailure=ip=>{const f=failures.get(ip);if(!f||Date.now()-f.since>FAIL_WINDOW)failures.set(ip,{count:1,since:Date.now()});else f.count++;};
+  const timer=setInterval(()=>{for(const [ip,f]of failures)if(Date.now()-f.since>FAIL_WINDOW)failures.delete(ip);for(const [ip,r]of rate)if(Date.now()-r.since>3600000)rate.delete(ip);for(const [t,exp]of sessions)if(exp<=Date.now())sessions.delete(t);},60000);timer.unref();
   const server=http.createServer(async(req,res)=>{
-    res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Cache-Control','no-store');
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://nominatim.openstreetmap.org; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
+    res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');res.setHeader('Permissions-Policy','camera=(), microphone=(), payment=(), usb=(), interest-cohort=(), geolocation=(self)');res.setHeader('Cross-Origin-Opener-Policy','same-origin');
+    if(config?.publicOrigin?.startsWith('https:'))res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');res.setHeader('Cache-Control','no-store');
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://nominatim.openstreetmap.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
     const json=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body));};
     try{
-      const url=new URL(req.url,'http://localhost');
+      const url=new URL(req.url,'http://localhost'),ip=clientIp(req);
+      // Wrong admin passwords (sign-in form or Authorization header) lock that address out for 15 minutes after 10 tries.
+      const adminPath=url.pathname==='/admin'||url.pathname.startsWith('/api/admin/');
+      if(adminPath&&lockedOut(ip)&&!sessionOf(req))throw new BookingError('Too many sign-in attempts. Please wait 15 minutes and try again.',429);
+      if(adminPath&&req.headers.authorization&&!hasAdminCredentials(req,adminCredentials))noteFailure(ip);
       // Container health check: no database work, no rate limit.
       if(url.pathname==='/healthz'){res.writeHead(200,{'Content-Type':'text/plain','Cache-Control':'no-store'});res.end('ok');return;}
       if(url.pathname==='/admin'){
@@ -60,7 +88,6 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       }
       if(url.pathname.startsWith('/api/')){
         if(!['GET','POST'].includes(req.method))throw new BookingError('Method not allowed.',405);
-        const ip=process.env.TRUST_PROXY==='1'?(req.headers['x-forwarded-for']?.split(',').at(-1)?.trim()||req.socket.remoteAddress):req.socket.remoteAddress;
         const now=Date.now();let bucket=rate.get(ip);if(!bucket||now-bucket.since>3600000){bucket={since:now,reads:0,writes:0};rate.set(ip,bucket);}
         const field=req.method==='POST'?'writes':'reads';bucket[field]++;
         // Signed-in admins save settings repeatedly; only anonymous traffic and sign-in attempts count toward the limit.
@@ -78,8 +105,10 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           // Check both fields every time (bitwise &) so a wrong username takes as long as a wrong password.
           if(sameSecret(form.get('username'),adminCredentials.username)&sameSecret(form.get('password'),adminCredentials.password)){
             const token=randomBytes(32).toString('base64url');sessions.set(token,Date.now()+SESSION_MS);
+            failures.delete(ip);
             res.writeHead(303,{'Location':'/admin','Set-Cookie':`kiean_admin=${token}; ${cookieFlags}; Max-Age=${SESSION_MS/1000}`});res.end();return;
           }
+          noteFailure(ip);
           res.writeHead(303,{'Location':'/admin?error=1'});res.end();return;
         }
         const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/branch-photos';
@@ -225,7 +254,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       // Clean page URLs: /booking serves booking.html; old .html addresses redirect permanently.
       const SLUGS=['booking','faq','payment','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
       const PAGES={'':'index.html',...Object.fromEntries(SLUGS.map(s=>[s,s+'.html']))},CLEAN={'index.html':'/',...Object.fromEntries(SLUGS.map(s=>[s+'.html','/'+s]))};
-      const path=decodeURIComponent(url.pathname).replace(/^\//,'');
+      let path;try{path=decodeURIComponent(url.pathname).replace(/^\//,'');}catch{throw new BookingError('Not found.',404);}
       if(CLEAN[path]){res.writeHead(301,{'Location':CLEAN[path]+url.search,'Cache-Control':'no-store'});res.end();return;}
       const name=PAGES[path]??path;
       // Photos uploaded in /admin live in the data folder; random names, so they can be cached for good.
@@ -234,7 +263,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         res.writeHead(200,{'Content-Type':types[extname(name)],'Cache-Control':'public, max-age=31536000, immutable'});res.end(req.method==='HEAD'?undefined:photo);return;
       }
       // Serve explicit public files only. Never expose configuration, credentials or SQLite.
-      if(!PUBLIC.has(name)&&!/^assets\/[a-zA-Z0-9_-]+\.(png|jpe?g|webp)$/.test(name))throw new BookingError('Not found.',404);
+      if(!PUBLIC.has(name)&&!/^assets\/(fonts\/)?[a-zA-Z0-9_-]+\.(png|jpe?g|webp|woff2)$/.test(name))throw new BookingError('Not found.',404);
       // Images can be cached for a week; CSS/JS linked with ?v= are versioned, so cache them long. Pages stay uncached.
       const cache=name.startsWith('assets/')?'public, max-age=604800':/\.(css|js|mjs)$/.test(name)?(url.searchParams.has('v')?'public, max-age=31536000, immutable':'no-cache'):'no-store';
       const content=await readFile(resolve(root,name));res.writeHead(200,{'Content-Type':types[extname(name)]||'application/octet-stream','Cache-Control':cache});res.end(req.method==='HEAD'?undefined:content);

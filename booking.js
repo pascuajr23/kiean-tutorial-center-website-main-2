@@ -29,7 +29,7 @@ async function api(path,options={}) {
 async function init(){
   try{const config=await api('/api/config');state.preview=config.preview;state.teachers=config.teachers;state.paymentInstructions=config.paymentInstructions;state.branches=config.branches||DEFAULT_BRANCHES;if(config.programs)setPrograms(config.programs);}
   catch{state.preview=true;state.teachers=PREVIEW_TEACHERS;}
-  $('connection-status').textContent=state.preview?'Preview mode — sample teacher and availability. No booking is saved and Google Calendar is not updated.':'Choose a teacher’s available dates. Confirmed sessions are added to the teacher’s Google Calendar.';
+  $('connection-status').textContent=state.preview?'Preview mode — sample teacher and availability. No booking is saved and Google Calendar is not updated.':'Live availability. Confirmed sessions go straight to the teacher’s Google Calendar.';
   $('connection-status').classList.toggle('live',!state.preview);
   $('submit-booking').textContent=state.preview?'Preview my sessions →':'Confirm sessions →';
   $('calendar-note').textContent=state.preview?'This is a preview. Google Calendar is not connected.':'Confirmed sessions will appear in the teacher’s Google Calendar.';
@@ -37,6 +37,7 @@ async function init(){
   for(const region of ['Cavite','Laguna','Batangas','Metro Manila','Other Luzon']){const opt=node('option',region==='Other Luzon'?'Other provinces':region);opt.value=region;$('province').append(opt);}
   const none=node('option','My area is not listed');none.value='none';$('province').append(none);
   $('care').replaceChildren(...Object.entries(KIDDIE_CARE).map(([id,c])=>{const opt=node('option',c.label);opt.value=id;return opt;}));
+  $('step-1').classList.remove('is-loading');$('step-1').removeAttribute('aria-busy');
   renderPrograms();
 }
 function renderPrograms(){
@@ -107,13 +108,16 @@ function go(step){
   document.querySelectorAll('.booking-steps li').forEach((li,i)=>{li.classList.toggle('done',i+1<step);if(i+1===step)li.setAttribute('aria-current','step');else li.removeAttribute('aria-current');li.querySelector('button').disabled=i+1>=step;});
   if(step===2){
     const p=getProgram();$('quick-select').hidden=monthly()||p.minSessions<5;
-    $('step-2-intro').textContent=monthly()?`Choose your start date. We reserve the next ${minDates()} ${p.care?'school days, Mon–Fri, (one month)':'class days'}, then choose the time.`:p.care?'Select one or more days of care, then choose a start time available on every day.':`Select at least ${p.minSessions} date${p.minSessions===1?'':'s'}, then choose a time available on every date.`;
+    $('step-2-intro').textContent=monthly()?`Choose your start date. We reserve the next ${minDates()} ${p.care?'school days (Mon–Fri, one month)':'class days'}, then choose the time.`:p.care?'Select one or more days of care, then choose a start time available on every day.':`Select at least ${p.minSessions} date${p.minSessions===1?'':'s'}, then choose a time available on every date.`;
     loadAvailability();
   }if(step===3)renderReview();$('step-'+step+'-title').focus();
 }
 function monthBounds(){const first=state.month+'-01';const [y,m]=state.month.split('-').map(Number);const last=new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);return {first,last};}
 async function loadAvailability(){
-  const request=++state.request,key=[state.teacher,state.program,bookingBranch(),state.month,state.care,state.hours].join('|');state.busy=true;state.common=[];if(state.availKey!==key){state.availability={};state.availKey=key;}$('time-status').textContent='Checking shared availability…';$('time-slots').replaceChildren();updateSummary();renderCalendar();
+  const request=++state.request,key=[state.teacher,state.program,bookingBranch(),state.month,state.care,state.hours].join('|');state.busy=true;state.common=[];if(state.availKey!==key){state.availability={};state.availKey=key;}$('time-status').textContent='Checking shared availability…';
+  // Skeletons while the server checks: shimmer the calendar on a fresh month, placeholder pills for the time slots.
+  $('calendar').classList.toggle('is-loading',!Object.keys(state.availability).length);
+  $('time-slots').replaceChildren(...(state.dates.length?Array.from({length:4},()=>node('span',undefined,'sk sk-pill')):[]));updateSummary();renderCalendar();
   try{
     const {first,last}=monthBounds();let data;
     if(state.preview){
@@ -128,8 +132,8 @@ async function loadAvailability(){
     state.availability=data.dates;state.common=data.common;if(!state.common.includes(state.time))state.time='';
     $('time-status').textContent=state.dates.length?(state.common.length?'Available on all selected dates.':'No shared time is available. Remove a date or select different dates.'):'';
     renderTimes();
-  }catch(error){if(request!==state.request)return;state.time='';$('time-status').textContent='Availability could not be verified.';showError(error.message);}
-  finally{if(request===state.request){state.busy=false;renderCalendar();updateSummary();}}
+  }catch(error){if(request!==state.request)return;state.time='';$('time-slots').replaceChildren();$('time-status').textContent='Availability could not be verified.';showError(error.message);}
+  finally{if(request===state.request){state.busy=false;$('calendar').classList.remove('is-loading');renderCalendar();updateSummary();}}
 }
 function renderCalendar(){
   const {first,last}=monthBounds();$('calendar-title').textContent=new Intl.DateTimeFormat('en-PH',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(first+'T12:00:00Z'));
@@ -185,7 +189,7 @@ function keepValidFiles(input,limit){
     if(f.size>MAX_ATTACHMENT_BYTES){problems.push(`${f.name} is too big (${(f.size/1048576).toFixed(1)} MB). Please choose a file of 5 MB or less.`);return false;}
     return true;
   });
-  if(valid.length>limit)problems.push(`Only the first ${limit} file${limit===1?'':'s'} were kept.`);
+  if(valid.length>limit)problems.push(`Only the first ${limit===1?'file was':`${limit} files were`} kept.`);
   showFileNote(input,problems);
   if(problems.length){const kept=new DataTransfer();valid.slice(0,limit).forEach(f=>kept.items.add(f));input.files=kept.files;}
 }
@@ -231,7 +235,7 @@ function lockForm(lock){state.locked=lock;document.querySelectorAll('#booking-fo
 function syncSubmit(){$('submit-booking').disabled=state.locked||!$('booking-form').elements.consent.checked;}
 $('booking-form').addEventListener('input',()=>{if(!state.locked)state.requestId=crypto.randomUUID();});
 $('booking-form').addEventListener('submit',async event=>{
-  event.preventDefault();if(state.locked)return;clearError();if(state.dates.length<minDates()||!state.time){showError(`Select at least ${minDates()} dates and one shared time.`);return;}
+  event.preventDefault();if(state.locked)return;clearError();if(state.dates.length<minDates()||!state.time){showError(`Select at least ${minDates()} date${minDates()===1?'':'s'} and one shared time.`);return;}
   let attachments;try{attachments=await readAttachments();}catch(error){showError(error.message);return;}
   const fields=Object.fromEntries(new FormData(event.target));const payload={...fields,consent:fields.consent==='on',teacher:state.teacher,program:state.program,branch:bookingBranch(),area:state.area,...(getProgram().care&&{care:state.care,needs:state.needs,plan:state.plan,tutorial:state.tutorial,hours:state.hours}),dates:state.dates,time:state.time,requestId:state.requestId,attachments};lockForm(true);$('submitting').showModal();$('submit-booking').textContent=state.preview?'Preparing preview…':'Checking dates and updating calendar…';
   try{
@@ -247,9 +251,9 @@ $('booking-form').addEventListener('submit',async event=>{
 function showConfirmation(b){
   for(let i=1;i<=3;i++)$('step-'+i).hidden=true;
   document.querySelectorAll('.booking-steps li').forEach(li=>{li.classList.add('done');li.removeAttribute('aria-current');li.querySelector('button').disabled=true;});
-  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':b.sessions.length===1?'Your session was added to your teacher’s Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'),node('p',`Total: ${totalLabel(b.total)} · ${b.paid?'Receipt received — the center will verify your payment.':'Not yet paid.'}`,'confirmation-total'),...(b.preview?[]:[node('p',b.online?'Your schedule and a Google Calendar invitation from KieAn, with one Google Meet link for every session, were sent to your email.':'Your full schedule has been sent to your email.')]));
+  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':b.sessions.length===1?'Your session was added to your teacher’s Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'),node('p',`Total: ${totalLabel(b.total)} · ${b.paid?'Receipt received — the center will verify your payment.':'Not yet paid.'}`,'confirmation-total'),...(b.paid||b.preview?[]:[Object.assign(node('a','How to pay with GCash →','pay-link'),{href:'/payment',target:'_blank',rel:'noopener'})]),...(b.preview?[]:[node('p',b.online?'Your schedule and a Google Calendar invitation from KieAn, with one Google Meet link for every session, were sent to your email.':'Your full schedule has been sent to your email.')]));
   const review=node('div',undefined,'review-box');review.append(node('h3',b.teacherName),...sessionRows(b.sessions,b.time));panel.append(review);
-  const actions=node('div',undefined,'panel-actions');const download=node('button',b.preview?'Download preview calendar':'Download my calendar','btn btn-orange');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([icsForBooking(b)],{type:'text/calendar;charset=utf-8'}));const a=node('a');a.href=url;a.download=b.preview?'kiean-preview.ics':`kiean-${b.reference}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);});const again=node('a','Start a new booking','btn btn-outline');again.href='/booking';actions.append(download,again);panel.append(actions,node('p',b.preview?'Live booking opens after the center connects its teachers and calendars.':'Save this reference. Contact the center for lesson access details, fees or changes to these sessions.'));panel.hidden=false;panel.focus();
+  const actions=node('div',undefined,'panel-actions');const download=node('button',b.preview?'Download preview calendar':'Download my calendar','btn btn-orange');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([icsForBooking(b)],{type:'text/calendar;charset=utf-8'}));const a=node('a');a.href=url;a.download=b.preview?'kiean-preview.ics':`kiean-${b.reference}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);});const again=node('a','Start a new booking','btn btn-outline');again.href='/booking';actions.append(download,again);panel.append(actions,node('p',b.preview?'Live booking opens after the center connects its teachers and calendars.':'Save this reference and quote it whenever you contact the center about payment or changes.'));panel.hidden=false;panel.focus();
 }
 $('submitting').addEventListener('cancel',e=>e.preventDefault());
 $('booking-form').elements.consent.addEventListener('change',syncSubmit);

@@ -10,6 +10,11 @@ document.querySelectorAll('.mobile-nav a').forEach(link => link.addEventListener
 document.querySelector('.mobile-menu-btn')?.addEventListener('click', toggleMobileMenu);
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMobileMenu(); });
 
+// Image skeletons: mark each image once it has loaded (or failed) so its shimmer placeholder stops.
+const markLoaded = img => img.classList.add('img-loaded');
+for (const type of ['load', 'error']) document.addEventListener(type, event => { if (event.target.tagName === 'IMG') markLoaded(event.target); }, true);
+document.querySelectorAll('img').forEach(img => { if (img.complete && img.naturalWidth) markLoaded(img); });
+
 // One shared <dialog> shows program details and photo galleries without leaving the page.
 const popup = document.getElementById('popup');
 const popupTitle = popup.querySelector('#popup-title');

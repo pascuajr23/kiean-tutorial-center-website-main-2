@@ -11,7 +11,7 @@ import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms} from '../lib/config.mjs';
-import {createApp} from '../server.mjs';
+import {createApp,clientIp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
@@ -533,4 +533,48 @@ test('unpaid parent emails link to the GCash payment page; paid ones do not',()=
   const paid=parentScheduleEmail({...booking,paid:true});
   assert.doesNotMatch(paid.html,/kieantutorial.com\/payment/);assert.doesNotMatch(paid.text,/How to pay/);
   assert.doesNotMatch(teacherEmail(booking,'teacher@example.test',[]).html,/kieantutorial.com\/payment/,'teachers do not get the payment link');
+});
+test('fonts are self-hosted: no Google Fonts requests, woff2 served, CSP allows only our own fonts',async t=>{
+  const app=createApp({config:{...config,preview:true}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port;
+  for(const f of ['dm-sans-latin','dm-sans-latin-ext','nunito-latin','nunito-latin-ext']){const r=await fetch(`${base}/assets/fonts/${f}.woff2`);assert.equal(r.status,200,f);assert.equal(r.headers.get('content-type'),'font/woff2');}
+  const home=await fetch(base+'/');assert.doesNotMatch(home.headers.get('content-security-policy'),/googleapis|gstatic/);
+  for(const p of ['/','/booking','/faq','/payment','/terms'])assert.doesNotMatch(await (await fetch(base+p)).text(),/fonts\.(googleapis|gstatic)\.com/,p);
+  assert.match(await (await fetch(base+'/style.css')).text(),/@font-face \{ font-family: 'DM Sans'/);
+  assert.equal((await fetch(base+'/assets/fonts/../../server.mjs')).status,404);
+});
+
+test('visitor address: CF-Connecting-IP is trusted only from Cloudflare, never from a direct request',()=>{
+  const req=(remote,headers={})=>({socket:{remoteAddress:remote},headers});
+  // Caddy (172.17.0.1) forwards a request it received from a Cloudflare edge server.
+  assert.equal(clientIp(req('172.17.0.1',{'x-forwarded-for':'162.158.10.20','cf-connecting-ip':'112.198.1.2'}),'cloudflare'),'112.198.1.2');
+  assert.equal(clientIp(req('172.17.0.1',{'x-forwarded-for':'2606:4700:10::6816:1','cf-connecting-ip':'112.198.1.2'}),'cloudflare'),'112.198.1.2');
+  // Someone bypassing Cloudflare fakes the header: their real address is used instead.
+  assert.equal(clientIp(req('172.17.0.1',{'x-forwarded-for':'45.9.8.7','cf-connecting-ip':'1.1.1.1'}),'cloudflare'),'45.9.8.7');
+  assert.equal(clientIp(req('::ffff:45.9.8.7',{'cf-connecting-ip':'1.1.1.1'}),'cloudflare'),'45.9.8.7');
+  assert.equal(clientIp(req('10.0.0.5',{'x-forwarded-for':'9.9.9.9, 45.9.8.7'}),'1'),'45.9.8.7');
+  assert.equal(clientIp(req('10.0.0.5',{'x-forwarded-for':'45.9.8.7'}),undefined),'10.0.0.5','headers ignored unless a proxy is configured');
+});
+test('admin sign-in: 10 wrong passwords lock that address out, by form or Authorization header; security headers are set',async t=>{
+  const cfg={...config,mode:'live',programs:structuredClone(DEFAULT_PROGRAMS),branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...config.teachers[0]}]};
+  const store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,4).toString('base64')});
+  const app=createApp({config:cfg,store,adminCredentials:{username:'center-admin',password:'private-password'}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>app.close(r));store.close();setPrograms(DEFAULT_PROGRAMS);});
+  const base='http://127.0.0.1:'+app.address().port,basic=pw=>({Authorization:'Basic '+Buffer.from('center-admin:'+pw).toString('base64')});
+  const login=pw=>fetch(base+'/api/admin/login',{method:'POST',redirect:'manual',headers:{Origin:cfg.publicOrigin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:'center-admin',password:pw})});
+  const head=await fetch(base+'/');
+  assert.match(head.headers.get('strict-transport-security'),/max-age=31536000/);assert.equal(head.headers.get('x-frame-options'),'DENY');
+  assert.match(head.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(head.headers.get('permissions-policy'),/camera=\(\)/);
+  assert.equal(head.headers.get('cross-origin-opener-policy'),'same-origin');
+  // a right password still works before the limit
+  assert.equal((await login('private-password')).headers.get('location'),'/admin');
+  for(let i=0;i<5;i++)assert.equal((await login('guess'+i)).headers.get('location'),'/admin?error=1');
+  for(let i=0;i<5;i++)assert.equal((await fetch(base+'/api/admin/teachers',{headers:basic('guess'+i)})).status,401);
+  // 10 failures across both doors: now locked, even with the right password
+  assert.equal((await login('private-password')).status,429);
+  assert.equal((await fetch(base+'/api/admin/teachers',{headers:basic('private-password')})).status,429);
+  assert.equal((await fetch(base+'/admin',{headers:basic('private-password')})).status,429);
+  assert.equal((await fetch(base+'/')).status,200,'the public site is unaffected');
+  assert.equal((await fetch(base+'/%E0%A4%A')).status,404,'a malformed address gets the 404 page, not a server error');
 });
