@@ -51,7 +51,7 @@ function renderPrograms(){
   const programs=!area?[]:state.mode==='online'?PROGRAMS.filter(p=>bookable(p)&&p.mode==='online'):PROGRAMS.filter(p=>bookable(p)&&p.mode==='branch'&&branches.length&&offers(state.branches,state.branch,p.id));
   if(!programs.length){
     $('program').replaceChildren();$('branch-field').hidden=!branches.length;$('care-fields').hidden=true;
-    $('program-info').replaceChildren(node('strong',state.area==='none'||area?'No KieAn branch or teacher serves your area yet.':'Choose where you live first.'),node('span',state.area==='none'||area?'Please message the center on Facebook and we will help you.':'Teachers and branches are matched to the area where you live.'));
+    $('program-info').replaceChildren(...(state.area==='none'||area?[node('strong','No KieAn branch or teacher serves your area yet.'),node('span','Please message the center on Facebook and we will help you.')]:[]));
     $('teachers').replaceChildren();state.teacher='';$('to-dates').disabled=true;$('mode').value=state.mode;updateSummary();return;
   }
   if(!programs.some(p=>p.id===state.program))state.program=programs[0].id;
@@ -88,6 +88,7 @@ function renderCare(){
 function renderTeachers(){
   const eligible=state.teachers.filter(t=>t.available!==false&&t.programs.includes(state.program)&&t.branches.includes(bookingBranch())&&offers(state.branches,bookingBranch(),state.program)&&(state.mode==='branch'||teacherServes(t,state.area,state.branches)));
   if(!eligible.some(t=>t.id===state.teacher&&(state.preview||t.googleConnected)))state.teacher='';
+  const ready=eligible.filter(t=>state.preview||t.googleConnected);if(!state.teacher&&ready.length===1)state.teacher=ready[0].id;
   $('teachers').replaceChildren(...eligible.map(t=>{
     const connected=state.preview||t.googleConnected;const card=node('label',undefined,'teacher-card');const radio=node('input');radio.type='radio';radio.name='teacher';radio.value=t.id;radio.checked=t.id===state.teacher;radio.disabled=!connected;
     radio.addEventListener('change',()=>{state.teacher=t.id;resetSchedule();renderTeachers();});
@@ -150,7 +151,7 @@ function toggleDate(date){
   if(monthly()){clearError();const days=enrollmentDates(date);if(days.length<minDates()){showError(`There are not ${minDates()} class days left from this start date. Choose an earlier start date.`);return;}state.dates=days;state.requestId=crypto.randomUUID();loadAvailability();return;}
   clearError();state.dates=state.dates.includes(date)?state.dates.filter(d=>d!==date):[...state.dates,date].sort();state.requestId=crypto.randomUUID();loadAvailability();}
 function renderTimes(){
-  $('time-help').textContent=state.dates.length?`${getLength()}-minute ${getProgram().group?'class':'lesson'}s. Choose one slot for all ${state.dates.length} selected dates.`:'Select your dates to see shared availability.';
+  $('time-help').textContent=state.dates.length?`${getProgram().care||getProgram().group?getLength():getProgram().lessonMinutes}-minute ${getProgram().group?'class':'lesson'}s. Choose one slot for all ${state.dates.length} selected dates.`:'Select your dates to see shared availability.';
   $('time-slots').replaceChildren(...state.common.map(t=>{const b=node('button',slotLabel(t,getLength()),'time-slot');b.type='button';b.dataset.time=t;b.setAttribute('aria-pressed',String(state.time===t));b.addEventListener('click',()=>{state.time=t;state.requestId=crypto.randomUUID();renderTimes();updateSummary();});return b;}));
 }
 async function addWeek(){
@@ -244,8 +245,11 @@ $('booking-form').addEventListener('submit',async event=>{
     else result=await api('/api/bookings',{method:'POST',body:JSON.stringify(payload)});
     state.confirmation=result;showConfirmation(result);
   }catch(error){
-    if(error.data?.reference)showError(error.message+' Reference: '+error.data.reference);else showError(error.message);
-    if(error.data?.conflicts?.length){state.time='';updateSummary();}
+    const clash=error.data?.conflicts||[];
+    // Name the dates that were just taken, so the parent knows what to change.
+    if(clash.length)showError(`${error.message} Taken: ${clash.map(d=>dateLabel(d,true)).join(', ')}.`);
+    else if(error.data?.reference)showError(error.message+' Reference: '+error.data.reference);else showError(error.message);
+    if(clash.length){state.time='';updateSummary();}
   }finally{$('submitting').close();lockForm(false);$('submit-booking').textContent=state.preview?'Preview my sessions →':'Confirm sessions →';}
 });
 function showConfirmation(b){

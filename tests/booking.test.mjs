@@ -10,7 +10,7 @@ import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL} from '../lib/mailer.mjs';
-import {loadConfig,validateTeacherRoster,validatePrograms} from '../lib/config.mjs';
+import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig} from '../lib/config.mjs';
 import {createApp,clientIp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
@@ -577,4 +577,9 @@ test('admin sign-in: 10 wrong passwords lock that address out, by form or Author
   assert.equal((await fetch(base+'/admin',{headers:basic('private-password')})).status,429);
   assert.equal((await fetch(base+'/')).status,200,'the public site is unaffected');
   assert.equal((await fetch(base+'/%E0%A4%A')).status,404,'a malformed address gets the 404 page, not a server error');
+});
+
+test('a leftover template placeholder for payment instructions never reaches parents',()=>{
+  assert.equal(publicConfig({...config,paymentInstructions:'REPLACE with GCash / bank details, e.g. GCash: 09XX XXX XXXX'}).paymentInstructions,'');
+  assert.equal(publicConfig({...config,paymentInstructions:'GCash 0917 000 0000 · KieAn Tutorial Center'}).paymentInstructions,'GCash 0917 000 0000 · KieAn Tutorial Center');
 });
