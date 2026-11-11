@@ -18,7 +18,7 @@
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_PH">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="assets/kiean-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..900&amp;family=Nunito:wght@700..900&amp;display=swap"><link rel="stylesheet" href="style.css?v=20261105-12"><link rel="stylesheet" href="booking.css?v=20261105-12">
+  <link rel="icon" href="assets/kiean-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..900&amp;family=Nunito:wght@700..900&amp;display=swap"><link rel="stylesheet" href="style.css?v=20261112-1"><link rel="stylesheet" href="booking.css?v=20261112-1">
 </head>
 <body class="booking-page">
   <header class="booking-header"><div class="container"><a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a><span class="timezone-label">Philippine Time · UTC+8</span></div></header>
@@ -66,7 +66,7 @@
             <label class="honeypot" aria-hidden="true">Leave empty<input name="website" tabindex="-1" autocomplete="off"></label>
             <div class="review-box"><h3>Your session dates</h3><div id="review-sessions"></div></div>
             <div class="price-box" aria-live="polite"><span>Total</span><strong id="total-price"></strong><small id="price-breakdown"></small></div>
-            <div class="payment-box"><h3>Payment</h3><p id="payment-instructions"></p><label class="file-field">Upload your payment receipt <span>(optional · JPG, PNG, WebP or PDF · 5 MB)</span><input type="file" id="receipt-file" accept="image/jpeg,image/png,image/webp,application/pdf"></label><small>Bookings with a receipt are marked as paid for the teacher. The center verifies every payment.</small></div>
+            <div class="payment-box"><h3>Payment</h3><p id="payment-instructions"></p><p class="pay-link"><a href="/payment" target="_blank" rel="noopener">How to pay with GCash →</a></p><label class="file-field">Upload your payment receipt <span>(optional · JPG, PNG, WebP or PDF · 5 MB)</span><input type="file" id="receipt-file" accept="image/jpeg,image/png,image/webp,application/pdf"></label><small>Bookings with a receipt are marked as paid for the teacher. The center verifies every payment.</small></div>
             <p class="fee-note" id="fee-note"></p>
             <label class="consent"><input type="checkbox" name="consent" required><span>I am the parent or guardian. I agree to share these details with KieAn for scheduling and follow-up, and I have reviewed all selected dates and the shared time. I accept the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/refund-policy" target="_blank" rel="noopener">Refund Policy</a>. <a href="#privacy-details">How booking details are used</a></span></label>
             <div class="panel-actions"><button type="button" class="btn btn-outline" data-back="2">← Dates & time</button><button id="submit-booking" type="submit" class="btn btn-orange">Confirm sessions →</button></div>
@@ -104,8 +104,8 @@
     </dialog>
     <div class="booking-help"><strong>Need help choosing a program?</strong> <a href="https://www.facebook.com/profile.php?id=61593257580081" target="_blank" rel="noopener noreferrer">Contact KieAn →</a></div>
   </main>
-  <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/faq">FAQ</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav></footer>
+  <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/faq">FAQ</a><a href="/payment">How to Pay</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav></footer>
   <dialog id="submitting" class="popup submitting-popup" aria-labelledby="submitting-title"><div class="popup-body submitting-body"><span class="spinner" aria-hidden="true"></span><h2 id="submitting-title">Booking your sessions…</h2><p>We are checking your dates, adding them to the teacher’s Google Calendar and sending your emails. This can take up to a minute. Please keep this page open.</p></div></dialog>
   <a aria-label="Message KieAn on Facebook for more information" class="messenger-float" href="https://www.facebook.com/profile.php?id=61593257580081" rel="noopener noreferrer" target="_blank"><img alt="" src="assets/fbmes.webp" width="96" height="96" loading="lazy" decoding="async"><span>Send us a message</span></a>
-  <script type="module" src="booking.js?v=20261105-12"></script>
+  <script type="module" src="booking.js?v=20261112-1"></script>
 </body></html>

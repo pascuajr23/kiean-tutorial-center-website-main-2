@@ -9,7 +9,7 @@ import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
-import {mime,teacherEmail,parentScheduleEmail} from '../lib/mailer.mjs';
+import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms} from '../lib/config.mjs';
 import {createApp} from '../server.mjs';
 import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
@@ -509,7 +509,7 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   const app=createApp({config:{...config,preview:true}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
   t.after(()=>new Promise(r=>app.close(r)));
   const base='http://127.0.0.1:'+app.address().port;
-  for(const slug of ['faq','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
+  for(const slug of ['faq','payment','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
     const r=await fetch(base+'/'+slug);assert.equal(r.status,200,slug);const html=await r.text();
     assert.match(html,new RegExp(`<link rel="canonical" href="https://kieantutorial.com/${slug}"`),slug);
     assert.match(html,/<meta (name="description" content="[^"]{50,}"|content="[^"]{50,}" name="description")/,slug);
@@ -517,10 +517,20 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   }
   const old=await fetch(base+'/privacy-policy.html',{redirect:'manual'});assert.equal(old.status,301);assert.equal(old.headers.get('location'),'/privacy-policy');
   const robots=await (await fetch(base+'/robots.txt')).text();assert.match(robots,/Disallow: \/admin/);assert.match(robots,/Sitemap: https:\/\/kieantutorial.com\/sitemap.xml/);
-  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,8);
+  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,9);
   const missing=await fetch(base+'/no-such-page');assert.equal(missing.status,404);assert.match(missing.headers.get('content-type'),/html/);const page=await missing.text();assert.match(page,/noindex/);assert.match(page,/We can’t find that page/);
   const api=await fetch(base+'/api/nothing');assert.equal(api.status,404);assert.match(api.headers.get('content-type'),/json/);
   assert.equal((await fetch(base+'/assets/og-image.png')).status,200);
   const faq=await (await fetch(base+'/faq')).text();assert.match(faq,/"@type":"FAQPage"/);
   for(const slug of ['','booking','faq'])assert.doesNotMatch(await (await fetch(base+'/'+slug)).text(),/<img(?![^>]*\balt=)[^>]*>/,'every image has alt text');
+});
+
+test('unpaid parent emails link to the GCash payment page; paid ones do not',()=>{
+  const booking={...validateBooking(payload(),config,NOW),id:'b1',reference:'KTC-TEST0001',paid:false,meetLink:'https://meet.google.com/abc-defg-hij'};
+  const unpaid=parentScheduleEmail(booking);
+  assert.match(unpaid.html,new RegExp(`href="${PAYMENT_URL}"`));assert.match(unpaid.html,/Pay by GCash, then reply to this email with your receipt/);
+  assert.match(unpaid.text,new RegExp(`How to pay: ${PAYMENT_URL}`));
+  const paid=parentScheduleEmail({...booking,paid:true});
+  assert.doesNotMatch(paid.html,/kieantutorial.com\/payment/);assert.doesNotMatch(paid.text,/How to pay/);
+  assert.doesNotMatch(teacherEmail(booking,'teacher@example.test',[]).html,/kieantutorial.com\/payment/,'teachers do not get the payment link');
 });
