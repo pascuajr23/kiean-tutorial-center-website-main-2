@@ -12,7 +12,7 @@ COPY package.json server.mjs shared.mjs ./
 COPY lib ./lib
 COPY scripts ./scripts
 COPY index.html booking.html admin.html admin-login.html 404.html \
-     faq.html privacy-policy.html terms.html refund-policy.html cookie-policy.html consent-form.html \
+     faq.html payment.html privacy-policy.html terms.html refund-policy.html cookie-policy.html consent-form.html \
      robots.txt sitemap.xml \
      style.css booking.css admin.css admin-responsive.css \
      site.js booking.js admin.js legal.js ./

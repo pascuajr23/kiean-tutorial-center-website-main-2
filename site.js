@@ -156,3 +156,20 @@ function renderGalleries(galleries) {
   fallbackAlt = 'KieAn Tutorial Center permit';
   if (permits && galleries.permits?.length) permits.replaceChildren(...galleries.permits.map(item => { const fig = el('figure'); fig.append(photo(item)); if (item.caption) fig.append(el('figcaption', '', item.caption)); return fig; }));
 }
+
+// Phone pager for the swipeable galleries (CSS hides it on wider screens). Counts children live, so redrawn galleries work too.
+document.querySelectorAll('.gallery-grid').forEach(grid => {
+  const pager = document.createElement('div'), prev = document.createElement('button'), next = document.createElement('button'), count = document.createElement('span');
+  pager.className = 'gallery-pager';
+  prev.type = next.type = 'button'; prev.textContent = '‹'; next.textContent = '›';
+  prev.setAttribute('aria-label', `Previous ${grid.dataset.title} photo`); next.setAttribute('aria-label', `Next ${grid.dataset.title} photo`);
+  count.setAttribute('aria-live', 'polite');
+  pager.append(prev, count, next); grid.after(pager);
+  const index = () => Math.round(grid.scrollLeft / Math.max(1, grid.clientWidth));
+  const update = () => { const n = grid.children.length, i = Math.min(index(), n - 1); count.textContent = `${i + 1} / ${n}`; prev.disabled = i <= 0; next.disabled = i >= n - 1; };
+  prev.addEventListener('click', () => grid.scrollBy({left: -grid.clientWidth}));
+  next.addEventListener('click', () => grid.scrollBy({left: grid.clientWidth}));
+  grid.addEventListener('scroll', () => requestAnimationFrame(update), {passive: true});
+  new MutationObserver(() => { grid.scrollLeft = 0; update(); }).observe(grid, {childList: true});
+  addEventListener('resize', update); update();
+});
