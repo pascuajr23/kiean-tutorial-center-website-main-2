@@ -14,7 +14,7 @@ import {BookingService} from './lib/booking-service.mjs';
 import {BookingError,validateAttachments} from './lib/domain.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.xml':'application/xml; charset=utf-8'};
-const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','admin.css','admin-responsive.css','admin.js']);
+const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','contact.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','admin.css','admin-responsive.css','admin.js']);
 function hasAdminCredentials(req,credentials){
   if(!credentials?.username||!credentials?.password)return false;
   const match=req.headers.authorization?.match(/^Basic\s+([A-Za-z0-9+/=]+)$/i);
@@ -252,7 +252,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       }
       if(!['GET','HEAD'].includes(req.method))throw new BookingError('Method not allowed.',405);
       // Clean page URLs: /booking serves booking.html; old .html addresses redirect permanently.
-      const SLUGS=['booking','faq','payment','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
+      const SLUGS=['booking','faq','payment','contact','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
       const PAGES={'':'index.html',...Object.fromEntries(SLUGS.map(s=>[s,s+'.html']))},CLEAN={'index.html':'/',...Object.fromEntries(SLUGS.map(s=>[s+'.html','/'+s]))};
       let path;try{path=decodeURIComponent(url.pathname).replace(/^\//,'');}catch{throw new BookingError('Not found.',404);}
       if(CLEAN[path]){res.writeHead(301,{'Location':CLEAN[path]+url.search,'Cache-Control':'no-store'});res.end();return;}

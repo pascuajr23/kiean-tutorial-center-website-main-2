@@ -19,7 +19,7 @@
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_PH">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css?v=20261112-8"><link rel="stylesheet" href="booking.css?v=20261112-8">
+  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css?v=20261112-10"><link rel="stylesheet" href="booking.css?v=20261112-10">
 </head>
 <body class="booking-page">
   <header class="booking-header"><div class="container"><a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a><span class="timezone-label">Philippine Time · UTC+8</span></div></header>
@@ -70,7 +70,8 @@
             <div class="price-box" aria-live="polite"><span>Total</span><strong id="total-price"></strong><small id="price-breakdown"></small></div>
             <div class="payment-box"><h3>Payment</h3><p id="payment-instructions"></p><p class="pay-link"><a href="/payment" target="_blank" rel="noopener">How to pay with GCash →</a></p><label class="file-field">Upload your payment receipt <span>(optional · JPG, PNG, WebP or PDF · 5 MB)</span><input type="file" id="receipt-file" accept="image/jpeg,image/png,image/webp,application/pdf"></label><small>Bookings with a receipt are marked as paid for the teacher. The center verifies every payment.</small></div>
             <p class="fee-note" id="fee-note"></p>
-            <label class="consent"><input type="checkbox" name="consent" required><span>I am the parent or guardian. I agree to share these details with KieAn for scheduling and follow-up, and I have reviewed all selected dates and the shared time. I accept the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/refund-policy" target="_blank" rel="noopener">Refund Policy</a>. <a href="#privacy-details">How booking details are used</a></span></label>
+            <label class="consent"><input type="checkbox" name="consent" required><span>I am the parent or guardian. I have reviewed all selected dates and the shared time, and I accept the <a href="/terms" target="_blank" rel="noopener">Terms</a> and <a href="/refund-policy" target="_blank" rel="noopener">Refund Policy</a>.</span></label>
+            <label class="consent"><input type="checkbox" name="privacyConsent" required><span>I consent to KieAn collecting and using my and my child’s personal information, including any health or special-needs details I share, to schedule and run these sessions, as described in the <a href="/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>. <a href="#privacy-details">How booking details are used</a></span></label>
             <div class="panel-actions"><button type="button" class="btn btn-outline" data-back="2">← Dates & time</button><button id="submit-booking" type="submit" class="btn btn-orange">Confirm sessions →</button></div>
           </form>
         </section>
@@ -86,7 +87,7 @@
           <li>Your name, email address and contact number.</li>
           <li>Your learner’s first name, grade and learning request, plus any homework or worksheets you attach.</li>
           <li>Your area (city or town), program, branch or online format, teacher, dates and time.</li>
-          <li>A payment receipt, if you upload one.</li>
+          <li>A payment receipt, if you upload one.</li><li>Any health or special-needs details you choose to share. These are sensitive information, used only with your consent and only by the staff who need them.</li>
         </ul>
         <h3>Why we use it</h3>
         <p>Only to schedule and run these lessons, confirm your payment, and contact you about your booking. We do not sell it or use it for advertising.</p>
@@ -101,13 +102,13 @@
         <h3>How long we keep it</h3>
         <p>Booking records, files and receipts are kept on KieAn’s booking server for as long as the center needs them for lessons and records.</p>
         <h3>Your choices</h3>
-        <p>You may ask to see, correct or delete your details at any time, as provided by the Philippine Data Privacy Act of 2012. Read the full <a href="/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>. <a href="https://www.facebook.com/profile.php?id=61593257580081" target="_blank" rel="noopener noreferrer">Message KieAn on Facebook</a> and quote your booking reference.</p>
+        <p>You may ask to see, correct or delete your details at any time, as provided by the Philippine Data Privacy Act of 2012. Read the full <a href="/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>. Our Data Protection Officer, Kierlle B. Piad, can be reached at <a href="mailto:kieanadmin@gmail.com">kieanadmin@gmail.com</a>. <a href="https://www.facebook.com/profile.php?id=61593257580081" target="_blank" rel="noopener noreferrer">Message KieAn on Facebook</a> and quote your booking reference.</p>
       </div>
     </dialog>
     <div class="booking-help"><strong>Need help choosing a program?</strong> <a href="https://www.facebook.com/profile.php?id=61593257580081" target="_blank" rel="noopener noreferrer">Contact KieAn →</a></div>
   </main>
-  <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/faq">FAQ</a><a href="/payment">How to Pay</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav></footer>
+  <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/contact">Contact</a><a href="/faq">FAQ</a><a href="/payment">How to Pay</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav><p class="biz-line">KIEAN TUTORIAL CENTER (Kierlle Bachiller Piad, sole proprietor) · DTI Business Name No. 2828786 · Phase 1A, Block 9 Lot 5, Natania Homes, Pasong Kawayan II, General Trias, Cavite 4107 · <a href="mailto:kieanadmin@gmail.com">kieanadmin@gmail.com</a></p></footer>
   <dialog id="submitting" class="popup submitting-popup" aria-labelledby="submitting-title"><div class="popup-body submitting-body"><span class="spinner" aria-hidden="true"></span><h2 id="submitting-title">Booking your sessions…</h2><p>We are checking your dates, adding them to the teacher’s Google Calendar and sending your emails. This can take up to a minute. Please keep this page open.</p></div></dialog>
   <a aria-label="Message KieAn on Facebook for more information" class="messenger-float" href="https://www.facebook.com/profile.php?id=61593257580081" rel="noopener noreferrer" target="_blank"><img alt="" src="assets/fbmes.webp" width="96" height="96" loading="lazy" decoding="async"><span>Send us a message</span></a>
-  <script type="module" src="booking.js?v=20261112-8"></script>
+  <script type="module" src="booking.js?v=20261112-10"></script>
 </body></html>
