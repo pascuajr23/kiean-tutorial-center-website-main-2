@@ -19,7 +19,7 @@
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="en_PH">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css?v=20261112-5"><link rel="stylesheet" href="booking.css?v=20261112-5">
+  <link rel="icon" href="assets/kiean-icon.png"><link rel="stylesheet" href="style.css?v=20261112-8"><link rel="stylesheet" href="booking.css?v=20261112-8">
 </head>
 <body class="booking-page">
   <header class="booking-header"><div class="container"><a href="/" aria-label="KieAn home"><img src="assets/kiean-logo.webp" width="300" height="143" alt="KieAn Tutorial Center"></a><span class="timezone-label">Philippine Time · UTC+8</span></div></header>
@@ -62,7 +62,7 @@
         <section id="step-3" class="step-panel" aria-labelledby="step-3-title" hidden>
           <div class="panel-title"><span class="step-eyebrow">STEP 03</span><h2 id="step-3-title" tabindex="-1">A few details, and you’re ready</h2><p>Review all dates and your shared time before submitting.</p></div>
           <form id="booking-form">
-            <div class="field-grid"><label>Parent / Guardian Name<input name="parentName" required maxlength="100" autocomplete="name"></label><label>Email Address<input type="email" name="email" required maxlength="200" autocomplete="email"></label><label>Contact Number<input type="tel" name="phone" required minlength="7" maxlength="30" autocomplete="tel"></label><label>Learner’s First Name<input name="studentName" required maxlength="80" autocomplete="off"></label><label>Grade Level<select name="grade" required><option value="">Select a grade</option><option>Toddler</option><option>Nursery</option><option>Kindergarten</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option></select></label></div>
+            <div class="field-grid"><label>Parent / Guardian Name<input name="parentName" required maxlength="100" autocomplete="name"></label><label>Email Address<input type="email" name="email" required maxlength="200" autocomplete="email"></label><label>Contact Number<input type="tel" name="phone" required minlength="7" maxlength="30" autocomplete="tel" placeholder="e.g. 0917 123 4567"></label><label>Learner’s First Name<input name="studentName" required maxlength="80" autocomplete="off"></label><label>Grade Level<select name="grade" required><option value="">Select a grade</option><option>Toddler</option><option>Nursery</option><option>Kindergarten</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option></select></label></div>
             <label class="notes-field">What would you like help with? <span>(optional)</span><textarea name="notes" rows="3" maxlength="350" placeholder="For example: reading practice or help with Math assignments."></textarea><small id="notes-count" class="notes-count">0 / 350</small><small>Please share medical reports directly with the center, outside this form.</small></label>
             <label class="file-field">Attach homework, modules or worksheets <span>(optional · up to 3 files · JPG, PNG, WebP or PDF · 5 MB each)</span><input type="file" id="request-files" accept="image/jpeg,image/png,image/webp,application/pdf" multiple></label><ul id="request-file-list" class="file-list" aria-live="polite"></ul><small id="request-file-count" class="file-count"></small>
             <label class="honeypot" aria-hidden="true">Leave empty<input name="website" tabindex="-1" autocomplete="off"></label>
@@ -109,5 +109,5 @@
   <footer class="booking-footer">© 2026 KieAn Tutorial Center <span>We care to learn.</span><nav class="footer-legal" aria-label="Policies"><a href="/faq">FAQ</a><a href="/payment">How to Pay</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms</a><a href="/refund-policy">Refund Policy</a></nav></footer>
   <dialog id="submitting" class="popup submitting-popup" aria-labelledby="submitting-title"><div class="popup-body submitting-body"><span class="spinner" aria-hidden="true"></span><h2 id="submitting-title">Booking your sessions…</h2><p>We are checking your dates, adding them to the teacher’s Google Calendar and sending your emails. This can take up to a minute. Please keep this page open.</p></div></dialog>
   <a aria-label="Message KieAn on Facebook for more information" class="messenger-float" href="https://www.facebook.com/profile.php?id=61593257580081" rel="noopener noreferrer" target="_blank"><img alt="" src="assets/fbmes.webp" width="96" height="96" loading="lazy" decoding="async"><span>Send us a message</span></a>
-  <script type="module" src="booking.js?v=20261112-5"></script>
+  <script type="module" src="booking.js?v=20261112-8"></script>
 </body></html>
