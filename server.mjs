@@ -27,7 +27,7 @@ function hasAdminCredentials(req,credentials){
 }
 // Compare secrets in constant time; a length mismatch still compares against itself so timing stays flat.
 function sameSecret(given,expected){const a=Buffer.from(String(given??'')),b=Buffer.from(String(expected));return timingSafeEqual(a.length===b.length?a:b,b)&&a.length===b.length;}
-const SESSION_MS=8*3600000;
+const SESSION_MS=8*3600000,MAX_BOOKINGS_IN_FLIGHT=4;
 const DEFAULT_TEACHER_ID='teacher-1';
 // The visitor's address for rate limits and sign-in lockouts. Behind Cloudflare every request arrives from a Cloudflare
 // server, so TRUST_PROXY=cloudflare uses CF-Connecting-IP (lock the server's firewall to Cloudflare so it can't be faked).
@@ -52,6 +52,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
   config.programs??=structuredClone(DEFAULT_PROGRAMS);setPrograms(config.programs);
   const rate=new Map();
   const oauthStates=new Map();
+  let bookingsInFlight=0;
   // shortcut: admin sessions live in memory, so a server restart signs staff out; move to SQLite if that matters.
   const sessions=new Map();
   const sessionOf=req=>{const token=req.headers.cookie?.match(/(?:^|;\s*)kiean_admin=([A-Za-z0-9_-]{43})(?:;|$)/)?.[1];if(!token)return null;if(sessions.get(token)>Date.now())return token;sessions.delete(token);return null;};
@@ -71,7 +72,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
     try{
       const url=new URL(req.url,'http://localhost'),ip=clientIp(req);
       // Wrong admin passwords (sign-in form or Authorization header) lock that address out for 15 minutes after 10 tries.
-      const adminPath=url.pathname==='/admin'||url.pathname.startsWith('/api/admin/');
+      const adminPath=url.pathname==='/admin'||url.pathname.startsWith('/api/admin/')||url.pathname==='/api/center/google/connect';
       if(adminPath&&lockedOut(ip)&&!sessionOf(req))throw new BookingError('Too many sign-in attempts. Please wait 15 minutes and try again.',429);
       if(adminPath&&req.headers.authorization&&!hasAdminCredentials(req,adminCredentials))noteFailure(ip);
       // Container health check: no database work, no rate limit.
@@ -243,8 +244,9 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           const teacher=connectCenter?{id:CENTER_ID}:config.teachers.find(t=>t.id===connect[1]);
           if(!teacher)throw new BookingError('Teacher not found.',404);
           for(const [key,value]of oauthStates)if(value.expires<Date.now())oauthStates.delete(key);
-          if(oauthStates.size>=1000)throw new BookingError('Too many connection requests. Try again shortly.',429);
-          const state=randomBytes(32).toString('base64url'),codeVerifier=randomBytes(32).toString('base64url');oauthStates.set(state,{teacherId:teacher.id,codeVerifier,expires:Date.now()+600000});
+          // Anonymous teacher links get 5 pending links per address and share the 1000 cap; the admin's center link always works.
+          if(!connectCenter){let mine=0;for(const value of oauthStates.values())if(value.ip===ip)mine++;if(mine>=5||oauthStates.size>=1000)throw new BookingError('Too many connection requests. Try again shortly.',429);}
+          const state=randomBytes(32).toString('base64url'),codeVerifier=randomBytes(32).toString('base64url');oauthStates.set(state,{teacherId:teacher.id,codeVerifier,expires:Date.now()+600000,ip});
           res.writeHead(302,{'Location':oauth.authorizationUrl(state,codeVerifier,connectCenter?CENTER_SCOPES:undefined),'Set-Cookie':`kiean_oauth_state=${state}; Path=/api/google/callback; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,'Cache-Control':'no-store'});res.end();return;
         }
         if(req.method==='GET'&&url.pathname==='/api/availability'){
@@ -255,9 +257,14 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           if(config.preview)throw new BookingError('Preview mode does not accept bookings or write to Google Calendar.',503);
           if(req.headers.origin!==config.publicOrigin)throw new BookingError('Booking requests must come from the KieAn website.',403);
           if(!req.headers['content-type']?.startsWith('application/json'))throw new BookingError('JSON is required.',415);
-          const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>21000000)throw new BookingError('Submission is too large. Attachments must total about 15 MB or less.',413);chunks.push(chunk);}
-          let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid submission.');}
-          json(200,await service.book(body));return;
+          // Each booking body can hold ~21 MB several times over in memory, so only a few are processed at once.
+          if(bookingsInFlight>=MAX_BOOKINGS_IN_FLIGHT)throw new BookingError('The booking system is busy. Please try again in a minute.',503);
+          bookingsInFlight++;
+          try{
+            const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>21000000)throw new BookingError('Submission is too large. Attachments must total about 15 MB or less.',413);chunks.push(chunk);}
+            let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid submission.');}
+            json(200,await service.book(body));return;
+          }finally{bookingsInFlight--;}
         }
         throw new BookingError('Not found.',404);
       }
@@ -276,7 +283,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       // Serve explicit public files only. Never expose configuration, credentials or SQLite.
       if(!PUBLIC.has(name)&&!/^assets\/(fonts\/)?[a-zA-Z0-9_-]+\.(png|jpe?g|webp|woff2)$/.test(name))throw new BookingError('Not found.',404);
       // Images can be cached for a week; CSS/JS linked with ?v= are versioned, so cache them long. Pages stay uncached.
-      const cache=name.startsWith('assets/')?'public, max-age=604800':/\.(css|js|mjs)$/.test(name)?(url.searchParams.has('v')?'public, max-age=31536000, immutable':'no-cache'):'no-store';
+      const cache=name.startsWith('assets/fonts/')?'public, max-age=31536000, immutable':name.startsWith('assets/')?'public, max-age=604800':/\.(css|js|mjs)$/.test(name)?(url.searchParams.has('v')?'public, max-age=31536000, immutable':'no-cache'):'no-store';
       const content=await readFile(resolve(root,name));res.writeHead(200,{'Content-Type':types[extname(name)]||'application/octet-stream','Cache-Control':cache});res.end(req.method==='HEAD'?undefined:content);
     }catch(error){
       if(res.headersSent){res.end();return;}

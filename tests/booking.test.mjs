@@ -605,3 +605,34 @@ test('homepage makes no public investment or profit-sharing offers (securities r
   assert.doesNotMatch(home,/Financial Investment|Net Profit Sharing|Co-Ownership|Invest with purpose|investment terms/i);
   assert.match(home,/does not offer investment or profit-sharing products to the public/);
 });
+test('abuse limits: center-connect counts toward the admin lockout, OAuth links are capped per address, bookings are capped in flight',async t=>{
+  const store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,7).toString('base64')});t.after(()=>store.close());
+  const oauth={authorizationUrl:state=>`https://accounts.google.com/auth?state=${state}`};
+  let release;const hold=new Promise(r=>{release=r;});
+  const app=createApp({config:{...config,centerEmail:'center@example.test'},store,oauth,service:{book:()=>hold.then(()=>({ok:true}))},adminCredentials:{username:'center-admin',password:'private-password'}});
+  await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port,basic=pw=>({Authorization:'Basic '+Buffer.from('center-admin:'+pw).toString('base64')});
+  const center=pw=>fetch(base+'/api/center/google/connect',{redirect:'manual',headers:basic(pw)});
+  // anonymous teacher links: 5 pending per address, then 429; the admin's center link still works
+  for(let i=0;i<5;i++)assert.equal((await fetch(base+'/api/teachers/teacher-1/google/connect',{redirect:'manual'})).status,302);
+  assert.equal((await fetch(base+'/api/teachers/teacher-1/google/connect',{redirect:'manual'})).status,429);
+  assert.equal((await center('private-password')).status,302);
+  // only 4 booking bodies are processed at once; the 5th is turned away before its body is read
+  const post=()=>fetch(base+'/api/bookings',{method:'POST',headers:{Origin:config.publicOrigin,'Content-Type':'application/json'},body:'{}'});
+  const pending=[post(),post(),post(),post()];await new Promise(r=>setTimeout(r,100));
+  assert.equal((await post()).status,503);release();for(const p of pending)assert.equal((await p).status,200);
+  // wrong Basic passwords on the center link now lock the address out, for the center link and /admin alike
+  for(let i=0;i<10;i++)assert.equal((await center('wrong-'+i)).status,303);
+  assert.equal((await center('private-password')).status,429);
+  assert.equal((await fetch(base+'/admin',{headers:basic('private-password')})).status,429);
+});
+test('availability reads Google once a minute per teacher, whatever dates are asked; failed bookings delete their uploads',async t=>{
+  const {service,calendar}=harness(t);let calls=0;const busy=calendar.busy;calendar.busy=async(...a)=>{calls++;return busy.apply(calendar,a);};
+  const q=dates=>service.availability({teacher:'teacher-1',program:'online',branch:'online',month:'2030-06',dates},NOW);
+  await q(payload().dates.join(','));await q('2030-06-10,2030-06-11');await q('');
+  assert.equal(calls,1);
+  const dir=mkdtempSync(join(tmpdir(),'kiean-uploads-')),store=new BookingStore(':memory:');t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+  const conflict=fakeCalendar({busy:[{start:'2030-06-03T02:00:00Z',end:'2030-06-03T03:00:00Z'}]}),svc=new BookingService(config,store,conflict,{uploadsDir:dir});
+  await assert.rejects(svc.book({...payload(),attachments:[{kind:'receipt',name:'r.png',type:'image/png',data:png}]},NOW),/no longer available/);
+  assert.deepEqual(readdirSync(dir),[]);
+});

@@ -2536,15 +2536,29 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
 /* =========================================================
    Loading skeletons (slow connections)
    ========================================================= */
-@keyframes sk-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+/* The highlight band moves with transform (GPU-composited), not background-position. */
+@keyframes sk-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 .sk,
 .date-grid.is-loading .date-cell:not(.selected),
 .gallery-item:not(:has(img.img-loaded)),
 .leader-photo:not(:has(img.img-loaded)),
 .popup-gallery .photo-frame:not(:has(img.img-loaded)) {
-    background: linear-gradient(100deg, #e8eef6 30%, #f7f9fc 50%, #e8eef6 70%) !important;
-    background-size: 300% 100% !important;
+    background: #e8eef6 !important;
+    position: relative;
+    overflow: hidden;
+}
+.sk::before,
+.date-grid.is-loading .date-cell:not(.selected)::before,
+.gallery-item:not(:has(img.img-loaded))::before,
+.leader-photo:not(:has(img.img-loaded))::before,
+.popup-gallery .photo-frame:not(:has(img.img-loaded))::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .7) 50%, transparent 70%);
     animation: sk-shimmer 1.4s linear infinite;
+    will-change: transform;
+    pointer-events: none;
 }
 /* Photos letterboxed on white (permits) stay see-through until loaded, so the shimmer shows. */
 .permit-grid .gallery-item img:not(.img-loaded), .popup-gallery .photo-frame img:not(.img-loaded) { background: transparent !important; }
@@ -2555,7 +2569,7 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
 .sk-pill { display: inline-block; width: 160px; max-width: 46%; height: 44px; margin: 0 8px 8px 0; border-radius: 999px; }
 .step-panel.is-loading .area-field, .step-panel.is-loading .program-info, .step-panel:not(.is-loading) .booking-skeleton { display: none; }
 @media (prefers-reduced-motion: reduce) {
-    .sk, .date-grid.is-loading .date-cell, .gallery-item, .leader-photo, .popup-gallery .photo-frame { animation: none !important; }
+    .sk::before, .date-grid.is-loading .date-cell::before, .gallery-item::before, .leader-photo::before, .popup-gallery .photo-frame::before { animation: none !important; }
 }
 
 /* Business disclosure (Internet Transactions Act): registered name, DTI number, address, contact */
@@ -2572,3 +2586,17 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
 @media (max-width: 640px) { .biz-list div { grid-template-columns: 1fr; gap: 2px; } }
 
 .investment-note { margin: 18px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+/* Homepage program cards and shared button states (moved from booking.css so the homepage needs one stylesheet). */
+.program-details{list-style:none;margin:18px 0 12px;font-size:13px;color:var(--muted)}.program-details li{margin:7px 0}.program-rate{display:block;color:var(--blue);font-size:14px}.program-tagline{font-style:italic;color:var(--blue)!important;margin-bottom:12px!important}.program-link{
+    margin-top:18px;
+    font-weight:700;
+    font-size:13px;
+    color:var(--blue);
+    display:inline-flex;
+    align-items:center;
+    min-height:44px;
+}.core-values{margin-top:25px}.core-values p{font-size:14px}.program-card{display:flex;flex-direction:column}.program-card .program-link{margin-top:auto;padding-top:20px}.program-card .program-rate{padding-bottom:18px}
+.btn:focus-visible{outline:3px solid var(--orange);outline-offset:3px}
+.btn:disabled,.btn[aria-disabled=true]{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}

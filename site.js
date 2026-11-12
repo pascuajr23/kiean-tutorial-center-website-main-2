@@ -175,6 +175,7 @@ document.querySelectorAll('.gallery-grid').forEach(grid => {
   prev.addEventListener('click', () => grid.scrollBy({left: -grid.clientWidth}));
   next.addEventListener('click', () => grid.scrollBy({left: grid.clientWidth}));
   grid.addEventListener('scroll', () => requestAnimationFrame(update), {passive: true});
-  new MutationObserver(() => { grid.scrollLeft = 0; update(); }).observe(grid, {childList: true});
-  addEventListener('resize', update); update();
+  // Layout reads wait for the next frame so they never force a synchronous reflow while the page is still building.
+  new MutationObserver(() => requestAnimationFrame(() => { grid.scrollLeft = 0; update(); })).observe(grid, {childList: true});
+  addEventListener('resize', () => requestAnimationFrame(update)); requestAnimationFrame(update);
 });
