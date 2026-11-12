@@ -23,7 +23,8 @@ try{
       if(Date.now()-Date.parse(booking.createdAt)<300000)throw new Error('Wait until the request is at least five minutes old before reconciliation.');
       let success=true;
       for(const session of booking.sessions){try{await calendar.remove(booking,session);}catch{success=false;}}
-      if(booking.branch==='online'){try{await calendar.removeInvite(booking);}catch{success=false;}}
+      // Online invites carry the Meet link and must go; a face-to-face reminder invite is best effort, like its creation.
+      try{await calendar.removeInvite(booking);}catch(error){if(booking.branch==='online')success=false;else console.warn(`${booking.reference}: teacher reminder invite not removed (${error.message}).`);}
       store.setStatus(booking.id,success?'cancelled':'review');
       console.log(`${booking.reference}: ${success?'calendar entries removed and slots released':'calendar cleanup incomplete; slots remain held'}.`);
     }
