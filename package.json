@@ -1,6 +1,6 @@
 {
   "name": "kiean-tutorial-booking",
-  "version": "0.1.9.1",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
   "engines": { "node": ">=24" },
