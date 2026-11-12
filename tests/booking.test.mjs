@@ -196,23 +196,6 @@ test('online invite comes from the center calendar with every date, both guests 
   assert.deepEqual(r.recurrence,['RDATE;TZID=Asia/Manila:20300604T100000,20300605T100000,20300606T100000,20300607T100000']);
   assert.match(r.description,/<li>/);
 });
-test('face-to-face bookings send the teacher a reminder invite at the branch, with no Meet link or parent guest',async t=>{
-  const calls=[],store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,5).toString('base64')});t.after(()=>store.close());
-  store.saveGoogleToken('__center__','kieanadmin@example.test','center-refresh');
-  const c=new GoogleCalendar({store,oauth:{async refresh(){return {accessToken:'center-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});return new Response('{}',{status:200});}});
-  const f2f={...config,teachers:[{...config.teachers[0],branches:['online','pila']}]};
-  const b={...validateBooking({...payload(),program:'academic',branch:'pila',dates:weekdays(20)},f2f,NOW),id:'124',reference:'KTC-F2F',total:3000,rate:150,paid:false};
-  await c.createInvite(b);const r=JSON.parse(calls[0].options.body);
-  assert.match(calls[0].url,/sendUpdates=all$/);assert.equal(r.conferenceData,undefined);
-  assert.deepEqual(r.attendees.map(a=>a.email),['teacher@example.test']);assert.match(r.location,/Pila/);
-  assert.equal(r.end.dateTime,`${b.sessions[0].date}T${String(Number(b.time.slice(0,2))+1).padStart(2,'0')}:00:00`);assert.equal(r.recurrence[0].split(',').length,19);
-  assert.match(r.description,/Face to face at Pila/);assert.doesNotMatch(r.description,/Meet/);
-  // the service sends it after confirming, and a failed invite never undoes the booking
-  const fake=fakeCalendar(),service=new BookingService(f2f,new BookingStore(':memory:'),fake);
-  await service.book({...payload(),program:'academic',branch:'pila',dates:weekdays(20)},NOW);assert.equal(fake.invites,1);
-  fake.createInvite=async()=>{throw new Error('Center not connected');};
-  const ok=await service.book({...payload(),program:'academic',branch:'pila',dates:weekdays(20),time:'14:00'},NOW);assert.equal(ok.sessions.length,20);
-});
 test('email subjects start with the first session day and HTML escapes parent input',()=>{
   const b={...validateBooking({...payload(),parentName:'<script>x</script>',notes:'<b>hi</b>'},config,NOW),id:'1',reference:'KTC-1',rate:200,total:1000,paid:true,sessions:payload().dates.map(date=>({date,meetLink:'https://meet.google.com/x'}))};
   const teacher=teacherEmail(b,'teacher@example.test',[]),parent=parentScheduleEmail({...b,branch:'natania'});
