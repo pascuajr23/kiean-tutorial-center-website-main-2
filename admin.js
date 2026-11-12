@@ -273,7 +273,7 @@ $('#location-photo-input').addEventListener('change',async e=>{
   }
 });
 async function saveLocations(next,message,remove){
-  try{const data=await request('/api/admin/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branches:next,remove})});setLocations(data.branches);renderLocations();if(editing===null)render();editor.close();setMessage(message,'success');}
+  try{const data=await request('/api/admin/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branches:next,remove})});setLocations(data.branches);if(data.teachers&&editing===null)teachers=data.teachers;renderLocations();if(editing===null)render();editor.close();setMessage(message,'success');}
   catch(error){$('#photo-status').textContent=error.message;}
 }
 locForm.addEventListener('submit',event=>{
@@ -435,7 +435,7 @@ function openProgram(p){
 async function savePrograms(next,text,remove){
   try{
     const data=await request('/api/admin/programs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({programs:next,remove})});
-    setPrograms(data.programs);renderPrograms();renderLocations();if(editing===null)render();progEditor.close();setMessage(text,'success');
+    setPrograms(data.programs);if(data.teachers&&editing===null)teachers=data.teachers;renderPrograms();renderLocations();if(editing===null)render();progEditor.close();setMessage(text,'success');
   }catch(error){if(progEditor.open)$('#program-status').textContent=error.message;else setMessage(error.message,'error');}
 }
 $('#add-program').addEventListener('click',()=>openProgram(null));

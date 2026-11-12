@@ -28,6 +28,7 @@ function hasAdminCredentials(req,credentials){
 // Compare secrets in constant time; a length mismatch still compares against itself so timing stays flat.
 function sameSecret(given,expected){const a=Buffer.from(String(given??'')),b=Buffer.from(String(expected));return timingSafeEqual(a.length===b.length?a:b,b)&&a.length===b.length;}
 const SESSION_MS=8*3600000;
+const DEFAULT_TEACHER_ID='teacher-1';
 // The visitor's address for rate limits and sign-in lockouts. Behind Cloudflare every request arrives from a Cloudflare
 // server, so TRUST_PROXY=cloudflare uses CF-Connecting-IP (lock the server's firewall to Cloudflare so it can't be faked).
 // TRUST_PROXY=1 uses the last X-Forwarded-For hop from a plain reverse proxy.
@@ -135,6 +136,13 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         };
         // Deleting is a deliberate second step: the saved item must already be disabled, only one goes per save,
         // and the request must carry its exact name as typed by the admin. Anything else is refused.
+        // New bookable programs and new locations go to teacher-1 by default, so they can be booked right away.
+        const withGoogle=list=>list.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))}));
+        const withDefaultTeacher=({programs=[],branches=[]})=>config.teachers.map(t=>t.id!==DEFAULT_TEACHER_ID?t:{...t,
+          programs:[...new Set([...t.programs,...programs.map(p=>p.id)])],
+          branches:[...new Set([...t.branches,...branches.map(b=>b.id)])],
+          // Class programs need their own class period; Mon–Fri 8 AM–5 PM, 10 seats, until the admin edits it.
+          weekly:programs.some(p=>p.group)?Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,[...(t.weekly[d]||[]),...(d>=1&&d<=5?programs.filter(p=>p.group).map(p=>['08:00','17:00',p.id,10]):[])]]).filter(([,r])=>r.length)):t.weekly});
         const checkRemoval=(kind,current,next,remove)=>{
           const ids=new Set(next.map(x=>x.id)),removed=current.filter(x=>!ids.has(x.id));
           if(!removed.length)return null;
@@ -150,7 +158,9 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           let branches;try{branches=validateBranches(body?.branches);}catch(error){throw new BookingError(error.message);}
           const gone=checkRemoval('location',config.branches,branches,body.remove);
           if(gone&&config.teachers.some(t=>t.branches.includes(gone.id)))throw new BookingError(`${gone.name} still has teachers. Move them to another location first.`,409);
-          await saveConfig({branches});json(200,{branches});return;
+          const teachers=withDefaultTeacher({branches:branches.filter(b=>!config.branches.some(x=>x.id===b.id))});
+          try{validateTeacherRoster(structuredClone(teachers),branches);}catch(error){throw new BookingError(error.message,409);}
+          await saveConfig({branches,teachers});json(200,{branches,teachers:withGoogle(teachers)});return;
         }
         if(url.pathname==='/api/admin/programs'){
           if(req.method==='GET'){json(200,{programs:config.programs});return;}
@@ -160,9 +170,10 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           if(gone&&(config.branches.some(b=>b.programs.includes(gone.id))||config.teachers.some(t=>t.programs.includes(gone.id)||Object.values(t.weekly).flat().some(range=>range[2]===gone.id))))throw new BookingError(`${gone.name} is still offered by a teacher or location. Remove it there first.`,409);
           // Teachers and locations must still be valid with the new list before it replaces the live one.
           setPrograms(programs);
-          try{validateBranches(config.branches);validateTeacherRoster(structuredClone(config.teachers),config.branches);await saveConfig({programs});}
+          const teachers=withDefaultTeacher({programs:programs.filter(p=>p.mode&&!config.programs.some(x=>x.id===p.id))});
+          try{validateBranches(config.branches);validateTeacherRoster(structuredClone(teachers),config.branches);await saveConfig({programs,teachers});}
           catch(error){setPrograms(config.programs);throw error instanceof BookingError||!error.code?new BookingError(error.message,409):error;}
-          json(200,{programs});return;
+          json(200,{programs,teachers:withGoogle(config.teachers)});return;
         }
         if(url.pathname==='/api/admin/galleries'){
           if(req.method==='GET'){json(200,{galleries:config.galleries||DEFAULT_GALLERIES});return;}
