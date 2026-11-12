@@ -367,6 +367,7 @@ test('admin manages locations: add, photos, in-use protection, and booking picks
   const fresh={id:'dasma',name:'Dasmariñas',address:'Somewhere, Dasmariñas, Cavite',available:true,programs:['academic','playgroup'],areas:['cavite-imus','cavite-dasmarinas'],photos:[path]};
   const saved=await post('/api/admin/branches',{branches:[...cfg.branches,fresh]});assert.equal(saved.status,200);
   assert.equal(JSON.parse(readFileSync(configPath,'utf8')).branches.at(-1).id,'dasma');
+  assert(cfg.teachers[0].branches.includes('dasma'),'new locations go to teacher-1 by default');assert((await saved.json()).teachers[0].branches.includes('dasma'));
   assert.deepEqual(areaBranches(cfg.branches,'cavite-dasmarinas'),['natania','south-square','maliksi','dasma']);
   const pub=await (await fetch(base+'/api/config')).json();assert.equal(pub.branches.at(-1).address,'Somewhere, Dasmariñas, Cavite');
   // teachers can now use the new location; bookings there pass the geo-fence
@@ -398,6 +399,7 @@ test('admin manages programs: prices, Kiddie Care rates, new classes, and bookin
   let next=edit('academic',{rate:175}).map(p=>p.care?{...p,careRates:rates}:p);next=[...next,club,{id:'camp',name:'Holiday Camp',link:'reading-club',price:'Ask us'}];
   const saved=await post('/api/admin/programs',{programs:next});assert.equal(saved.status,200,await saved.clone().text());
   assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')).programs.slice(-2).map(p=>p.id),['reading-club','camp']);
+  const t1=JSON.parse(readFileSync(configPath,'utf8')).teachers[0];assert(t1.programs.includes('reading-club')&&!t1.programs.includes('camp'),'new bookable programs go to teacher-1 by default');assert.deepEqual(t1.weekly[1].at(-1),['08:00','17:00','reading-club',10]);
   assert.equal((await (await fetch(base+'/api/config')).json()).programs.find(p=>p.id==='camp').link,'reading-club');
   assert.equal(kiddieQuote({care:'day',needs:'regular',hours:4,days:2}).total,500);
   assert(PERIOD_TYPES.some(p=>p.id==='reading-club'&&p.group));
@@ -597,4 +599,9 @@ test('compliance: every public page and parent email identifies the business; bo
   const email=parentScheduleEmail({...validateBooking(payload(),config,NOW),id:'b1',reference:'KTC-TEST0002',paid:false});
   assert(email.html.includes('DTI Business Name No. 2828786'));assert(email.text.includes(BUSINESS));
   assert.throws(()=>validateBooking({...payload(),privacyConsent:false},config,NOW),/personal information/);
+});
+test('homepage makes no public investment or profit-sharing offers (securities rules)',()=>{
+  const home=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  assert.doesNotMatch(home,/Financial Investment|Net Profit Sharing|Co-Ownership|Invest with purpose|investment terms/i);
+  assert.match(home,/does not offer investment or profit-sharing products to the public/);
 });

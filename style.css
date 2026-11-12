@@ -2570,3 +2570,5 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
 .biz-list dt { color: var(--muted); font-size: 13px; font-weight: 700; }
 .biz-list dd { margin: 0; color: var(--text); font-size: 15px; }
 @media (max-width: 640px) { .biz-list div { grid-template-columns: 1fr; gap: 2px; } }
+
+.investment-note { margin: 18px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
