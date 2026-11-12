@@ -177,7 +177,7 @@ function renderReview(){
   const rate=sessionRate(state.program,branchById(state.branches,bookingBranch())),p=getProgram(),care=quote();
   $('total-price').textContent=totalLabel(care?care.total:rate==null?null:rate*state.dates.length);
   $('price-breakdown').textContent=care?care.summary:rate==null?`${state.dates.length} day${state.dates.length===1?'':'s'} · ${state.hours} h each · the center confirms the fee`:monthly()?`${minDates()} class days`:`${state.dates.length} sessions × ${peso(rate)} per session`;
-  $('payment-instructions').textContent=state.paymentInstructions||'Pay by GCash, then reply to your booking email with the receipt, or pay at the branch. Already paid? Upload your receipt here.';
+  $('payment-instructions').textContent=state.paymentInstructions||'Scan the QR code in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.';
   $('fee-note').textContent=(p.price?p.price+'. ':'')+(p.care?KIDDIE_NOTES.join(' '):monthly()?`${p.name} covers ${p.minSessions} class days; renew with the center.`:p.minSessions>1?`${p.name} bookings need at least ${p.minSessions} sessions.`:'Book one or more sessions.')+(rate==null?'':' The total uses the per-session package rate.');
 }
 function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getLength())));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
