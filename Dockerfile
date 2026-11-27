@@ -1,6 +1,11 @@
 # KieAn website: Node 24 standard library only (no npm install), so a single small stage is enough.
 FROM node:24-alpine
 WORKDIR /app
+# Shown on the public About page: the commit and its date (set by the GitHub Actions build).
+ARG KIEAN_COMMIT=""
+ARG KIEAN_UPDATED=""
+ENV KIEAN_COMMIT=$KIEAN_COMMIT \
+    KIEAN_UPDATED=$KIEAN_UPDATED
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
@@ -12,7 +17,7 @@ COPY package.json server.mjs shared.mjs ph-areas.mjs ./
 COPY lib ./lib
 COPY scripts ./scripts
 COPY index.html booking.html admin.html admin-login.html 404.html \
-     faq.html payment.html contact.html privacy-policy.html terms.html refund-policy.html cookie-policy.html consent-form.html \
+     faq.html payment.html contact.html about.html privacy-policy.html terms.html refund-policy.html cookie-policy.html consent-form.html \
      robots.txt sitemap.xml \
      style.css booking.css admin.css admin-responsive.css \
      site.js booking.js admin.js legal.js ./

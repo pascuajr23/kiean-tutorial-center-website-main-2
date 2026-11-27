@@ -85,10 +85,12 @@ docker login ghcr.io -u YOUR_GITHUB_USERNAME
 
 ```sh
 git clone https://github.com/OWNER/REPO.git /opt/kiean-src
-cd /opt/kiean-src && docker build -t kiean:local .
+cd /opt/kiean-src && docker build -t kiean:local \
+  --build-arg KIEAN_COMMIT=$(git rev-parse HEAD) \
+  --build-arg KIEAN_UPDATED=$(git log -1 --format=%cI) .
 ```
 
-Then use `image: kiean:local` in the next step.
+Then use `image: kiean:local` in the next step. The two build arguments fill in the version reference and last-updated date on the public About page; GitHub Actions passes them automatically.
 
 The image runs as an unprivileged user, contains no secrets, needs no `npm install` (the app has zero dependencies) and has a built-in health check.
 

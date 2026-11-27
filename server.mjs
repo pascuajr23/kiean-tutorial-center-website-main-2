@@ -1,5 +1,6 @@
 import http from 'node:http';
 import {chmod,mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import {resolve,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
@@ -14,7 +15,7 @@ import {BookingService} from './lib/booking-service.mjs';
 import {BookingError,validateAttachments} from './lib/domain.mjs';
 const root=dirname(fileURLToPath(import.meta.url));
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.xml':'application/xml; charset=utf-8'};
-const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','contact.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','ph-areas.mjs','admin.css','admin-responsive.css','admin.js']);
+const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','contact.html','about.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','ph-areas.mjs','admin.css','admin-responsive.css','admin.js']);
 function hasAdminCredentials(req,credentials){
   if(!credentials?.username||!credentials?.password)return false;
   const match=req.headers.authorization?.match(/^Basic\s+([A-Za-z0-9+/=]+)$/i);
@@ -27,6 +28,18 @@ function hasAdminCredentials(req,credentials){
 }
 // Compare secrets in constant time; a length mismatch still compares against itself so timing stays flat.
 function sameSecret(given,expected){const a=Buffer.from(String(given??'')),b=Buffer.from(String(expected));return timingSafeEqual(a.length===b.length?a:b,b)&&a.length===b.length;}
+// Public "About this website" facts. The release build sets KIEAN_COMMIT and KIEAN_UPDATED; a local copy reads the
+// checked-out commit from .git when it can. Nothing about the server or hosting is exposed.
+export function siteVersion(env=process.env){
+  const version=JSON.parse(readFileSync(new URL('./package.json',import.meta.url),'utf8')).version;
+  let commit=env.KIEAN_COMMIT||'';
+  if(!commit)try{
+    const head=readFileSync(new URL('./.git/HEAD',import.meta.url),'utf8').trim();
+    commit=head.startsWith('ref: ')?readFileSync(new URL('./.git/'+head.slice(5),import.meta.url),'utf8').trim():head;
+  }catch{}
+  const updated=env.KIEAN_UPDATED&&!Number.isNaN(Date.parse(env.KIEAN_UPDATED))?new Date(env.KIEAN_UPDATED).toISOString():null;
+  return {version,commit:/^[0-9a-f]{7,40}$/.test(commit)?commit.slice(0,7):null,updated,source:'https://github.com/pascuajr23/kiean-tutorial-center-website-main-2'};
+}
 const SESSION_MS=8*3600000,MAX_BOOKINGS_IN_FLIGHT=4;
 const DEFAULT_TEACHER_ID='teacher-1';
 // The visitor's address for rate limits and sign-in lockouts. Behind Cloudflare every request arrives from a Cloudflare
@@ -53,6 +66,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
   const rate=new Map();
   const oauthStates=new Map();
   let bookingsInFlight=0;
+  const version=siteVersion();
   // shortcut: admin sessions live in memory, so a server restart signs staff out; move to SQLite if that matters.
   const sessions=new Map();
   const sessionOf=req=>{const token=req.headers.cookie?.match(/(?:^|;\s*)kiean_admin=([A-Za-z0-9_-]{43})(?:;|$)/)?.[1];if(!token)return null;if(sessions.get(token)>Date.now())return token;sessions.delete(token);return null;};
@@ -221,6 +235,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           config.teachers=teachers;json(200,{teachers:teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))}))});return;
         }
         if(req.method==='GET'&&url.pathname==='/api/config'){json(200,publicConfig(config,store));return;}
+        if(req.method==='GET'&&url.pathname==='/api/version'){json(200,version);return;}
         if(req.method==='GET'&&url.pathname==='/api/google/callback'){
           const state=url.searchParams.get('state');
           const cookie=req.headers.cookie?.match(/(?:^|;\s*)kiean_oauth_state=([A-Za-z0-9_-]+)/)?.[1];
@@ -278,7 +293,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       }
       if(!['GET','HEAD'].includes(req.method))throw new BookingError('Method not allowed.',405);
       // Clean page URLs: /booking serves booking.html; old .html addresses redirect permanently.
-      const SLUGS=['booking','faq','payment','contact','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
+      const SLUGS=['booking','faq','payment','contact','about','privacy-policy','terms','refund-policy','cookie-policy','consent-form'];
       const PAGES={'':'index.html',...Object.fromEntries(SLUGS.map(s=>[s,s+'.html']))},CLEAN={'index.html':'/',...Object.fromEntries(SLUGS.map(s=>[s+'.html','/'+s]))};
       let path;try{path=decodeURIComponent(url.pathname).replace(/^\//,'');}catch{throw new BookingError('Not found.',404);}
       if(CLEAN[path]){res.writeHead(301,{'Location':CLEAN[path]+url.search,'Cache-Control':'no-store'});res.end();return;}

@@ -24,3 +24,18 @@ if (qrSection) {
     qrSection.querySelector('p').textContent = `Before you confirm a payment, check that GCash shows the account name above${list.length > 1 ? ' for the QR you scanned' : ''}. On the same phone? Save the QR image, then use Upload QR in GCash.`;
   }).catch(() => {});
 }
+
+// About page: the live version, its last update and its reference (from /api/version).
+const versionList = document.getElementById('site-version');
+if (versionList) {
+  const field = key => versionList.querySelector(`[data-version="${key}"]`);
+  fetch('/api/version').then(r => r.ok ? r.json() : Promise.reject()).then(v => {
+    field('version').textContent = `v${v.version}`;
+    field('updated').textContent = v.updated ? new Date(v.updated).toLocaleString('en-PH', {timeZone: 'Asia/Manila', dateStyle: 'long', timeStyle: 'short'}) + ' (Philippine Time)' : 'Not recorded for this copy';
+    if (v.commit && v.source) {
+      const link = document.createElement('a');
+      link.href = `${v.source}/commit/${v.commit}`; link.target = '_blank'; link.rel = 'noopener'; link.textContent = v.commit;
+      field('commit').replaceChildren(link);
+    } else field('commit').textContent = 'Not recorded for this copy';
+  }).catch(() => { for (const key of ['version', 'updated', 'commit']) field(key).textContent = 'Unavailable right now'; });
+}

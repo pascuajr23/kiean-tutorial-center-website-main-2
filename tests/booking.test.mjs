@@ -11,7 +11,7 @@ import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs,validateBranches} from '../lib/config.mjs';
-import {createApp,clientIp} from '../server.mjs';
+import {createApp,clientIp,siteVersion} from '../server.mjs';
 import {paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
@@ -534,7 +534,7 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   const app=createApp({config:{...config,preview:true}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
   t.after(()=>new Promise(r=>app.close(r)));
   const base='http://127.0.0.1:'+app.address().port;
-  for(const slug of ['faq','payment','contact','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
+  for(const slug of ['faq','payment','contact','about','privacy-policy','terms','refund-policy','cookie-policy','consent-form','booking','']){
     const r=await fetch(base+'/'+slug);assert.equal(r.status,200,slug);const html=await r.text();
     assert.match(html,new RegExp(`<link rel="canonical" href="https://kieantutorial.com/${slug}"`),slug);
     assert.match(html,/<meta (name="description" content="[^"]{50,}"|content="[^"]{50,}" name="description")/,slug);
@@ -542,11 +542,15 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
   }
   const old=await fetch(base+'/privacy-policy.html',{redirect:'manual'});assert.equal(old.status,301);assert.equal(old.headers.get('location'),'/privacy-policy');
   const robots=await (await fetch(base+'/robots.txt')).text();assert.match(robots,/Disallow: \/admin/);assert.match(robots,/Sitemap: https:\/\/kieantutorial.com\/sitemap.xml/);
-  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,10);
+  const sitemap=await fetch(base+'/sitemap.xml');assert.match(sitemap.headers.get('content-type'),/xml/);assert.equal(((await sitemap.text()).match(/<loc>/g)||[]).length,11);
   const missing=await fetch(base+'/no-such-page');assert.equal(missing.status,404);assert.match(missing.headers.get('content-type'),/html/);const page=await missing.text();assert.match(page,/noindex/);assert.match(page,/We can’t find that page/);
   const api=await fetch(base+'/api/nothing');assert.equal(api.status,404);assert.match(api.headers.get('content-type'),/json/);
   assert.equal((await fetch(base+'/assets/og-image.png')).status,200);
   const faq=await (await fetch(base+'/faq')).text();assert.match(faq,/"@type":"FAQPage"/);
+  // About page: public version facts only, and every page links to it; the homepage has a visible admin button
+  const ver=await (await fetch(base+'/api/version')).json();assert.match(ver.version,/^\d+\.\d+/);assert.deepEqual(Object.keys(ver).sort(),['commit','source','updated','version']);
+  for(const slug of ['','booking','faq','terms','about'])assert.match(await (await fetch(base+'/'+slug)).text(),/href="\/about"/,slug);
+  const home=await (await fetch(base+'/')).text();assert.match(home,/class="footer-admin" href="\/admin"/);assert.doesNotMatch(home.slice(home.indexOf('<footer')),/quiet-link|We care to learn\.<\/a>/);
   for(const slug of ['','booking','faq'])assert.doesNotMatch(await (await fetch(base+'/'+slug)).text(),/<img(?![^>]*\balt=)[^>]*>/,'every image has alt text');
 });
 
@@ -727,4 +731,11 @@ test('geo-fences cover the whole Philippines: whole provinces or single cities, 
   const cebu=DEFAULT_BRANCHES.map(x=>x.id==='natania'?{...x,areas:[...x.areas,'province:cebu']}:x);
   assert.equal(teacherServes({branches:['online','natania']},'cebu-cebu-city',cebu),true);
   assert.deepEqual(areaBranches(cebu,'cebu-cebu-city'),[]);
+});
+
+test('About page version facts come from the release build, never server details',()=>{
+  const v=siteVersion({KIEAN_COMMIT:'19d49fe0c2b3a4d5e6f708192a3b4c5d6e7f8091',KIEAN_UPDATED:'2026-11-27T13:30:00+08:00'});
+  assert.equal(v.commit,'19d49fe');assert.equal(v.updated,'2026-11-27T05:30:00.000Z');
+  assert.equal(siteVersion({KIEAN_COMMIT:'not a commit; rm -rf',KIEAN_UPDATED:'yesterday'}).updated,null);
+  assert.notEqual(siteVersion({KIEAN_COMMIT:'not a commit; rm -rf'}).commit,'not a commit; rm -rf');
 });

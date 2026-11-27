@@ -136,11 +136,6 @@ a {
     text-decoration: none;
 }
 
-/* Staff shortcut to /admin: looks like plain text (still focusable for keyboard users). */
-.quiet-link {
-    cursor: inherit;
-}
-
 img {
     max-width: 100%;
     height: auto;
@@ -2620,7 +2615,6 @@ h2, h3, .permit-grid figcaption { text-wrap: balance; }
 .footer-bottom { flex-wrap: wrap; row-gap: 12px; }
 .footer-bottom > span { flex: 1 1 100%; }
 .footer-bottom .footer-legal { flex: 1 1 auto; }
-.footer-bottom .quiet-link { white-space: nowrap; }
 
 @media (max-width: 520px) {
     /* Online service cards: tighter stack on phones instead of tall, mostly empty panels. */
@@ -2632,3 +2626,8 @@ h2, h3, .permit-grid figcaption { text-wrap: balance; }
 .pay-qr-figure { display: grid; justify-items: center; gap: 8px; }
 .pay-qr-img { width: 220px; max-width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; padding: 8px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); }
 .pay-qr-save { font-size: 13px; font-weight: 700; color: var(--blue); }
+
+/* Staff sign-in, under the footer tagline. */
+.footer-admin { display: inline-flex; align-items: center; min-height: 40px; margin-top: 18px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: var(--radius-sm); color: var(--white); font-size: var(--fs-label); font-weight: 700; text-decoration: none; transition: background 0.2s ease, border-color 0.2s ease; }
+.footer-admin:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.5); }
+.footer-admin:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
