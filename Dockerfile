@@ -12,15 +12,10 @@ ENV NODE_ENV=production \
     KIEAN_CONFIG=/etc/kiean/config.json \
     KIEAN_DATA_DIR=/var/lib/kiean
 # Least-changing files first so code edits reuse the cached image layers.
-COPY assets ./assets
-COPY package.json server.mjs shared.mjs ph-areas.mjs ./
+COPY package.json server.mjs ./
 COPY lib ./lib
 COPY scripts ./scripts
-COPY index.html booking.html admin.html admin-login.html 404.html \
-     faq.html payment.html contact.html about.html privacy-policy.html terms.html refund-policy.html cookie-policy.html consent-form.html \
-     robots.txt sitemap.xml \
-     style.css booking.css admin.css admin-responsive.css \
-     site.js booking.js admin.js legal.js ./
+COPY public ./public
 # App files stay root-owned (the app cannot modify itself). Only config (atomic saves from /admin)
 # and data (bookings database, uploaded photos) are writable by the unprivileged "node" user.
 RUN mkdir -p /etc/kiean /var/lib/kiean && chown node:node /etc/kiean /var/lib/kiean

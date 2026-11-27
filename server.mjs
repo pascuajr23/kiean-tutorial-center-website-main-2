@@ -6,14 +6,15 @@ import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {BlockList,isIPv6} from 'node:net';
 import {loadConfig,publicConfig,validateTeacherRoster,validateBranches,validatePrograms,validateGalleries,validatePaymentQrs} from './lib/config.mjs';
-import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './shared.mjs';
+import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './public/shared.mjs';
 import {GoogleCalendar} from './lib/calendar.mjs';
 import {GoogleOAuth,CENTER_SCOPES} from './lib/google-oauth.mjs';
 import {GmailMailer,CENTER_ID} from './lib/mailer.mjs';
 import {BookingStore} from './lib/store.mjs';
 import {BookingService} from './lib/booking-service.mjs';
 import {BookingError,validateAttachments} from './lib/domain.mjs';
-const root=dirname(fileURLToPath(import.meta.url));
+// Everything the browser may load lives in public/; server code, tests and config stay outside it.
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'public');
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.txt':'text/plain; charset=utf-8','.woff2':'font/woff2','.xml':'application/xml; charset=utf-8'};
 const PUBLIC=new Set(['index.html','booking.html','faq.html','payment.html','contact.html','about.html','privacy-policy.html','terms.html','refund-policy.html','cookie-policy.html','consent-form.html','legal.js','robots.txt','sitemap.xml','style.css','booking.css','site.js','booking.js','shared.mjs','ph-areas.mjs','admin.css','admin-responsive.css','admin.js']);
 function hasAdminCredentials(req,credentials){
@@ -137,7 +138,9 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         const readJson=async limit=>{
           if(!req.headers['content-type']?.startsWith('application/json'))throw new BookingError('JSON is required.',415);
           const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>limit)throw new BookingError('The upload is too large.',413);chunks.push(chunk);}
-          try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid data.');}
+          let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid data.');}
+          if(!body||typeof body!=='object'||Array.isArray(body))throw new BookingError('Invalid data.');
+          return body;
         };
         // Save config.json atomically (write a temp file, then rename) so a crash never leaves it half-written.
         const saveConfig=async changes=>{
@@ -286,6 +289,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           try{
             const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>21000000)throw new BookingError('Submission is too large. Attachments must total about 15 MB or less.',413);chunks.push(chunk);}
             let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new BookingError('Invalid submission.');}
+            if(!body||typeof body!=='object'||Array.isArray(body))throw new BookingError('Invalid submission.');
             json(200,await service.book(body));return;
           }finally{bookingsInFlight--;}
         }
@@ -315,6 +319,11 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
       if(missing&&!req.url.startsWith('/api/')&&['GET','HEAD'].includes(req.method)){
         const page=await readFile(resolve(root,'404.html')).catch(()=>null);
         if(page){res.writeHead(404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:page);return;}
+      }
+      // The /admin page shows its errors (not configured, too many attempts) on the sign-in page, not as raw JSON.
+      if(error instanceof BookingError&&req.url.split('?')[0]==='/admin'&&['GET','HEAD'].includes(req.method)){
+        const page=await readFile(resolve(root,'admin-login.html'),'utf8').catch(()=>null);
+        if(page){const text=error.message.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));res.writeHead(error.status,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:page.replace('<!--ERROR-->',`<p class="admin-message" data-kind="error" role="alert">${text}</p>`));return;}
       }
       if(error instanceof BookingError)json(error.status,{error:error.message,...error.details});
       else if(error.code==='ENOENT')json(404,{error:'Not found.'});

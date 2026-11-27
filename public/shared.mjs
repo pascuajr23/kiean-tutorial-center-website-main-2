@@ -30,10 +30,13 @@ export const DEFAULT_PROGRAMS = [
 // Geo-fence places (portfolio pp. 35–39). Which branch serves which place is branch data (see DEFAULT_BRANCHES and /admin).
 export const slug = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 // Every Philippine city and municipality as {id, region (its province), name}; ids look like "cavite-general-trias".
-export const AREAS = PH_PLACES.flatMap(([region, places]) => places.map(name => ({id: slug(region + ' ' + name), region, name})));
+// Families living abroad pick "Outside the Philippines": online lessons only (no branch lists it face to face).
+export const ABROAD = 'Outside the Philippines', ABROAD_AREA = 'outside-the-philippines-any-country';
+const PLACES = [...PH_PLACES, [ABROAD, ['Any country']]];
+export const AREAS = PLACES.flatMap(([region, places]) => places.map(name => ({id: slug(region + ' ' + name), region, name})));
 const AREA_BY_ID = new Map(AREAS.map(a => [a.id, a]));
 // A geo-fence lists city ids and whole provinces ("province:cavite" = every city and municipality in Cavite).
-export const PROVINCES = PH_PLACES.map(([name]) => ({id: 'province:' + slug(name), name}));
+export const PROVINCES = PLACES.map(([name]) => ({id: 'province:' + slug(name), name}));
 const PROVINCE_IDS = new Set(PROVINCES.map(p => p.id));
 export const isGeoEntry = id => AREA_BY_ID.has(id) || PROVINCE_IDS.has(id);
 export const inGeoFence = (list = [], areaId) => { const a = AREA_BY_ID.get(areaId); return Boolean(a) && (list.includes(areaId) || list.includes('province:' + slug(a.region))); };
@@ -54,7 +57,7 @@ export const DEFAULT_BRANCHES = [
   {id: 'san-francisco', name: 'San Francisco', address: 'Phase 1, Block 27 Lot 36, Tierra Nevada, Barangay San Francisco, General Trias, Cavite', programs: ['academic', 'after-school', 'sped', 'nursery']},
   {id: 'maliksi', name: 'Maliksi Heroes-Town', address: '2F, Block 21 Lots 30–32, Unit 2, Phase 1, Pamayanang Maliksi, Barangay Pasong Kawayan II, General Trias, Cavite', programs: ['academic', 'after-school', 'sped', 'playgroup']},
   {id: 'naic', name: 'Ciudad Nuevo, Naic', address: 'Phase 2, Block 2 Lot 3, Ciudad Nuevo, Barangay Timalan Balsahan, Naic, Cavite', programs: ['academic', 'after-school', 'nursery']}
-].map(b => ({...b, available: true, f2fAreas: DEFAULT_F2F_AREAS[b.id], areas: DEFAULT_ONLINE_AREAS[b.id], photos: photos(b.id, b.id === 'naic' ? 4 : 2)}));
+].map(b => ({...b, available: true, f2fAreas: DEFAULT_F2F_AREAS[b.id], areas: [...DEFAULT_ONLINE_AREAS[b.id], 'province:outside-the-philippines'], photos: photos(b.id, b.id === 'naic' ? 4 : 2)}));
 // Branch helpers take the current branch list (from config.json on the server, /api/config in the browser).
 // GCash QR codes for a booking: the ones assigned to its location, or those marked for online bookings. Hidden codes never show.
 export function paymentQrsFor(qrs = [], branches = [], branchId) {
@@ -255,6 +258,7 @@ export function scheduleSummary(weekly={}){
 // Match an OpenStreetMap reverse-geocoding address to a geo-fence area (town first, then province/region).
 const plainName = text => slug(String(text || '').replace(/^city of /i, '').replace(/ city$/i, ''));
 export function matchArea(address = {}) {
+  if (address.country_code && address.country_code.toLowerCase() !== 'ph') return AREAS.find(a => a.id === ABROAD_AREA);
   const provinces = [address.province, address.state, address.region].map(plainName).filter(Boolean);
   const towns = [address.city, address.town, address.municipality, address.village, address.city_district, address.county].map(plainName).filter(Boolean);
   const inRegion = area => provinces.some(p => p.includes(slug(area.region)) || (area.region === 'Metro Manila' && /metro-manila|national-capital|ncr/.test(p)));

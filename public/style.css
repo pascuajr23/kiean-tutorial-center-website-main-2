@@ -2514,7 +2514,7 @@ img {
 
 /* How to Pay page */
 .pay-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 6px; padding: 0; list-style: none; counter-reset: pay; }
-.pay-steps li { counter-increment: pay; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--blue-light); color: var(--text); font-size: 14px; line-height: 1.5; }
+.pay-steps li { counter-increment: pay; margin: 0; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--blue-light); color: var(--text); font-size: 14px; line-height: 1.5; }
 .pay-steps li::before { content: counter(pay); display: grid; place-items: center; width: 26px; height: 26px; margin-bottom: 8px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: 900; font-size: 13px; }
 .pay-qr { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; margin: 6px 0 12px; }
 .qr-placeholder { display: grid; place-content: center; gap: 6px; width: 220px; aspect-ratio: 1; border: 2px dashed var(--border); border-radius: var(--radius); background: var(--light-bg); text-align: center; color: var(--muted); }

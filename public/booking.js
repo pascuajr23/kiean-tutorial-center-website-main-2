@@ -1,4 +1,4 @@
-import {PROVINCES,paymentQrsFor,PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
+import {ABROAD,ABROAD_AREA,PROVINCES,paymentQrsFor,PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
 const $=id=>document.getElementById(id);
 const q=new URLSearchParams(location.search);
 const today=manilaDay();
@@ -36,7 +36,7 @@ async function init(){
   // Province first (every province in the Philippines; KieAn's home provinces on top), then its cities and municipalities.
   const provinceGroup=(label,names)=>{const g=document.createElement('optgroup');g.label=label;g.append(...names.map(name=>{const opt=node('option',name);opt.value=name;return opt;}));return g;};
   const HOME=['Cavite','Laguna','Batangas','Metro Manila'];
-  $('province').append(provinceGroup('Near KieAn branches',HOME),provinceGroup('All provinces',PROVINCES.map(p=>p.name).filter(n=>!HOME.includes(n))));
+  $('province').append(provinceGroup('Near KieAn branches',HOME),provinceGroup('Living abroad',[ABROAD]),provinceGroup('All provinces',PROVINCES.map(p=>p.name).filter(n=>!HOME.includes(n)&&n!==ABROAD)));
   $('care').replaceChildren(...Object.entries(KIDDIE_CARE).map(([id,c])=>{const opt=node('option',c.label);opt.value=id;return opt;}));
   $('step-1').classList.remove('is-loading');$('step-1').removeAttribute('aria-busy');
   renderPrograms();
@@ -104,7 +104,7 @@ function renderTeachers(){
   $('to-dates').disabled=!state.teacher;updateSummary();
 }
 function updateSummary(){
-  const p=getProgram();$('summary-program').textContent=p.name;$('summary-teacher').textContent=getTeacher()?.name||'Choose a teacher';$('summary-time').textContent=state.time?slotLabel(state.time,getLength()):'Choose a time slot';$('summary-location-row').hidden=state.mode!=='branch';$('summary-location').textContent=branchById(state.branches,state.branch)?.name||'';
+  const p=getProgram();$('summary-program').textContent=p.name;$('summary-teacher').textContent=getTeacher()?.name||'Choose a teacher';$('summary-time').textContent=state.time?slotLabel(state.time,getLength())+yourTime([...state.dates].sort()[0],state.time):'Choose a time slot';$('summary-location-row').hidden=state.mode!=='branch';$('summary-location').textContent=branchById(state.branches,state.branch)?.name||'';
   $('session-count').textContent=`${state.dates.length} session${state.dates.length===1?'':'s'}`;$('minimum-status').textContent=`${state.dates.length} / ${minDates()}${state.dates.length>=minDates()?' ✓':''}`;$('session-progress').max=minDates();$('session-progress').value=Math.min(minDates(),state.dates.length);$('session-hint').textContent=state.dates.length>=minDates()?(state.dates.length<maxDates()?`Minimum reached. Add more dates for a steadier routine (up to ${maxDates()}).`:'All set: one teacher and one shared time for every date.'):`Select ${minDates()-state.dates.length} more date${minDates()-state.dates.length===1?'':'s'} to reach the minimum.`;
   $('duration-note').textContent=!p.care&&!p.group&&p.lessonMinutes<getLength()?`${p.lessonMinutes} minutes of focused learning, plus ${getLength()-p.lessonMinutes} minutes between lessons.`:p.care?`${state.hours} hour${state.hours>1?'s':''} of care each ${KIDDIE_CARE[state.care].night?'night':'day'}, starting at the same time.`:`Each ${p.group?'class':'lesson'} lasts ${getLength()} minutes. All selected dates use the same time slot.`;
   $('to-details').disabled=state.busy||state.dates.length<minDates()||!state.time||!state.common.includes(state.time);
@@ -158,7 +158,7 @@ function toggleDate(date){
   clearError();state.dates=state.dates.includes(date)?state.dates.filter(d=>d!==date):[...state.dates,date].sort();state.requestId=crypto.randomUUID();loadAvailability();}
 function renderTimes(){
   $('time-help').textContent=state.dates.length?`${getProgram().care||getProgram().group?getLength():getProgram().lessonMinutes}-minute ${getProgram().group?'class':'lesson'}s. Choose one slot for all ${state.dates.length} selected dates.`:'Select your dates to see shared availability.';
-  $('time-slots').replaceChildren(...state.common.map(t=>{const b=node('button',slotLabel(t,getLength()),'time-slot');b.type='button';b.dataset.time=t;b.setAttribute('aria-pressed',String(state.time===t));b.addEventListener('click',()=>{state.time=t;state.requestId=crypto.randomUUID();renderTimes();updateSummary();});return b;}));
+  $('time-slots').replaceChildren(...state.common.map(t=>{const b=node('button',slotLabel(t,getLength())+yourTime([...state.dates].sort()[0],t),'time-slot');b.type='button';b.dataset.time=t;b.setAttribute('aria-pressed',String(state.time===t));b.addEventListener('click',()=>{state.time=t;state.requestId=crypto.randomUUID();renderTimes();updateSummary();});return b;}));
 }
 async function addWeek(){
   if(state.busy)return;clearError();
@@ -186,9 +186,17 @@ function renderReview(){
   const qrs=payQrs();
   $('payment-instructions').textContent=state.paymentInstructions||(qrs.length>1?'Scan any one of these QR codes in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.':'Scan the QR code in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.');
   renderPayQrs(qrs);
+  // Families abroad: prices are in pesos, and GCash may not work from their country.
+  $('abroad-note').hidden=state.area!==ABROAD_AREA;
   $('fee-note').textContent=(p.price?p.price+'. ':'')+(p.care?KIDDIE_NOTES.join(' '):monthly()?`${p.name} covers ${p.minSessions} class days; renew with the center.`:p.minSessions>1?`${p.name} bookings need at least ${p.minSessions} sessions.`:'Book one or more sessions.')+(rate==null?'':' The total uses the per-session package rate.');
 }
-function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getLength())));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
+// Parents abroad: the same moment in their device's own time zone, or '' when that is Philippine Time anyway.
+function yourTime(day,time){
+  if(!day||!time)return '';
+  const at=instant(day,time),opts={hour:'numeric',minute:'2-digit'},mine=at.toLocaleString('en-PH',{...opts,weekday:'short'}),ph=at.toLocaleString('en-PH',{...opts,weekday:'short',timeZone:'Asia/Manila'});
+  return mine===ph?'':` · ${at.toLocaleString('en-PH',{...opts,...(at.toLocaleDateString('en-PH')!==at.toLocaleDateString('en-PH',{timeZone:'Asia/Manila'})?{weekday:'short'}:{})})} your time`;
+}
+function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getLength())+yourTime(s.date,time)));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
 const bookingBranch=()=>state.mode==='online'?'online':state.branch;
 // GCash QR codes for this booking: the ones assigned to the chosen location, or those marked for online bookings.
 const payQrs=()=>paymentQrsFor(state.paymentQrs,state.branches,bookingBranch());
@@ -293,7 +301,7 @@ function fillAreas(region){
   const first=node('option',region?'Choose your city or municipality':'Choose your province first');first.value='';
   $('area').replaceChildren(first,...places.map(a=>{const opt=node('option',a.name);opt.value=a.id;return opt;}));$('area').disabled=!places.length;
 }
-$('province').addEventListener('change',e=>{fillAreas(e.target.value);state.area=e.target.value==='none'?'none':'';state.teacher='';resetSchedule();renderPrograms();});
+$('province').addEventListener('change',e=>{fillAreas(e.target.value);state.area=e.target.value===ABROAD?ABROAD_AREA:'';$('area').value=state.area;state.teacher='';resetSchedule();renderPrograms();});
 $('area').addEventListener('change',e=>{state.area=e.target.value;state.teacher='';resetSchedule();renderPrograms();});
 $('locate').addEventListener('click',locate);
 // Optional: find the parent's town from the browser location (they must allow it); manual choice always works.

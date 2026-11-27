@@ -8,11 +8,11 @@ import {BookingStore} from '../lib/store.mjs';
 import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
-import {validateBooking,validateAttachments} from '../lib/domain.mjs';
+import {validateBooking,validateAttachments,BookingError} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs,validateBranches} from '../lib/config.mjs';
 import {createApp,clientIp,siteVersion} from '../server.mjs';
-import {paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
+import {paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../public/shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true,privacyConsent:true});
@@ -393,6 +393,7 @@ test('admin manages locations: add, photos, in-use protection, and booking picks
   assert.equal((await post('/api/admin/branches',{branches:cfg.branches.map(b=>b.id==='pila'?{...b,available:false}:b)})).status,200);
   const res=await post('/api/admin/branches',{branches:cfg.branches.filter(b=>b.id!=='pila'),remove:{id:'pila',name:'Pila, Laguna'}});assert.equal(res.status,409);assert.match((await res.json()).error,/Pila, Laguna still has teachers/);
   assert.equal((await post('/api/admin/branches',{branches:[{...fresh,areas:['mars']}]})).status,400);
+  for(const body of ['null','[]','7'])assert.equal((await fetch(base+'/api/admin/branches',{method:'POST',headers:auth,body})).status,400,`admin body ${body}`);
   assert.equal((await post('/api/admin/branches',{branches:[...cfg.branches,{...fresh,f2fAreas:['mars']}]})).status,400);
   // face-to-face areas save separately from online areas, and a new order is kept for the homepage and booking page
   const moved=[...cfg.branches].reverse().map(b=>b.id==='naic'?{...b,f2fAreas:['cavite-naic','cavite-tanza']}:b);
@@ -633,7 +634,7 @@ test('compliance: every public page and parent email identifies the business; bo
   assert.throws(()=>validateBooking({...payload(),privacyConsent:false},config,NOW),/personal information/);
 });
 test('homepage makes no public investment or profit-sharing offers (securities rules)',()=>{
-  const home=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const home=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
   assert.doesNotMatch(home,/Financial Investment|Net Profit Sharing|Co-Ownership|Invest with purpose|investment terms/i);
   assert.match(home,/does not offer investment or profit-sharing products to the public/);
 });
@@ -714,7 +715,7 @@ test('payment QR rules: location codes, online codes, hidden codes never show; o
 });
 
 test('geo-fences cover the whole Philippines: whole provinces or single cities, and old saved areas upgrade',()=>{
-  assert.equal(AREAS.length,1634);
+  assert.equal(AREAS.length,1635,'1,634 Philippine places plus Outside the Philippines');
   assert(inGeoFence(['province:cebu'],'cebu-cebu-city'));assert(inGeoFence(['province:cebu'],'cebu-mandaue'));
   assert(!inGeoFence(['province:cebu'],'bohol-tagbilaran'));
   assert(inGeoFence(['bohol-tagbilaran'],'bohol-tagbilaran'));assert(!inGeoFence(['bohol-tagbilaran'],'bohol-panglao'));
@@ -738,4 +739,62 @@ test('About page version facts come from the release build, never server details
   assert.equal(v.commit,'19d49fe');assert.equal(v.updated,'2026-11-27T05:30:00.000Z');
   assert.equal(siteVersion({KIEAN_COMMIT:'not a commit; rm -rf',KIEAN_UPDATED:'yesterday'}).updated,null);
   assert.notEqual(siteVersion({KIEAN_COMMIT:'not a commit; rm -rf'}).commit,'not a commit; rm -rf');
+});
+
+test('families abroad can book online lessons, never face to face, and see prices and payment notes',()=>{
+  // "Outside the Philippines" is in the area list, matched from the browser's country, and online-only
+  assert.equal(matchArea({country_code:'AE',city:'Dubai'})?.id,'outside-the-philippines-any-country');
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'outside-the-philippines-any-country'),[]);
+  assert.equal(teacherServes({branches:['online','san-pedro']},'outside-the-philippines-any-country',DEFAULT_BRANCHES),true);
+  // the server accepts an overseas booking for online lessons with an international phone number
+  const abroad={...payload(),area:'outside-the-philippines-any-country',phone:'+971 50 123 4567'};
+  const cfg={...config,teachers:[{...config.teachers[0],branches:['online','pila']}]};
+  assert.equal(validateBooking(abroad,cfg,NOW).branch,'online');
+  assert.throws(()=>validateBooking({...abroad,program:'academic',branch:'pila',dates:weekdays(20)},cfg,NOW),/does not serve your area/);
+  // the booking page explains pesos, GCash limits and local times to families abroad
+  const html=readFileSync(new URL('../public/booking.html',import.meta.url),'utf8');
+  assert.match(html,/id="abroad-note"[^>]*>.*Philippine pesos.*GCash.*your own time/s);
+});
+
+test('every page has valid structured data, a title, a description and works without inline scripts',()=>{
+  const dir=new URL('../public/',import.meta.url);
+  for(const file of readdirSync(dir).filter(f=>f.endsWith('.html'))){
+    const html=readFileSync(new URL(file,dir),'utf8');
+    for(const [,block] of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g))assert.doesNotThrow(()=>JSON.parse(block),`${file}: structured data must be valid JSON`);
+    assert.match(html,/<title>[^<]{10,}<\/title>/,file);
+    // the Content Security Policy blocks inline scripts and handlers, so none may be relied on
+    assert.doesNotMatch(html,/<script(?![^>]*\b(src=|type="application\/ld\+json"))[^>]*>/,`${file}: inline script`);
+    assert.doesNotMatch(html,/\son(click|load|submit|change)=/i,`${file}: inline event handler`);
+  }
+});
+
+test('the admin page shows its errors on the sign-in page instead of raw JSON',async t=>{
+  const app=createApp({config:{...config,mode:'live'},adminCredentials:{username:'',password:''}});await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>app.close(r)));
+  const r=await fetch('http://127.0.0.1:'+app.address().port+'/admin');
+  assert.equal(r.status,503);assert.match(r.headers.get('content-type'),/text\/html/);assert.match(await r.text(),/role="alert">Admin sign-in is not configured on this server\./);
+});
+test('stress: 25 parents racing for one slot get exactly one booking; the rest are told it is taken',async t=>{
+  const {service,calendar}=harness(t);
+  const results=await Promise.allSettled(Array.from({length:25},()=>service.book(payload(),NOW)));
+  const ok=results.filter(r=>r.status==='fulfilled'),failed=results.filter(r=>r.status==='rejected');
+  assert.equal(ok.length,1);assert.equal(failed.length,24);
+  assert(failed.every(r=>r.reason instanceof BookingError&&r.reason.status<500),'losers get a clear 4xx message, never a server error');
+  assert.equal(calendar.events.size,5,'only the winner reached the calendar');
+});
+test('fuzz: 300 malformed bookings get clear errors, never a crash; broken HTTP bodies never reach a 500',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-fuzz-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const {service,store}=harness(t);service.uploadsDir=dir;
+  const hostile=[null,'',0,-1,1e309,true,[],{},'<script>x</script>','../../etc/passwd','\u0000','x'.repeat(5000),{$gt:''},['2030-06-03'],'2030-02-30','25:00','DROP TABLE bookings;--',[{kind:'receipt',name:'r.png',type:'image/png',data:'not base64!!'}]];
+  const keys=Object.keys(payload());let seed=7;const rand=n=>(seed=(seed*1103515245+12345)%2147483648)%n;
+  for(let i=0;i<300;i++){
+    const body=payload();for(let k=0;k<1+rand(4);k++)body[i%9===0?'attachments':keys[rand(keys.length)]]=hostile[rand(hostile.length)];
+    try{await service.book(body,NOW);}catch(error){assert(error instanceof BookingError&&error.status<500,`case ${i}: ${error.name}: ${error.message}`);}
+  }
+  // the HTTP layer: broken JSON, wrong types and oversized fields are refused with 4xx
+  const app=createApp({config,service,store});await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>app.close(r)));
+  const base='http://127.0.0.1:'+app.address().port;
+  for(const [type,body] of [['application/json','{"broken'],['application/json','[]'],['application/json','null'],['application/json','42'],['application/json','"text"'],['text/plain','hello'],['application/json',JSON.stringify({...payload(),dates:'x'.repeat(10000)})]]){
+    const r=await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:config.publicOrigin,'Content-Type':type},body});
+    assert(r.status>=400&&r.status<500,`${type} ${body.slice(0,20)} gave ${r.status}`);
+  }
 });

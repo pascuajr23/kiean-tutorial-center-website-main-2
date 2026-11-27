@@ -226,6 +226,7 @@ Open `https://example.com/admin`:
 | **Teachers** | Names, programs, branches, weekly hours, blackout dates. Turn on *Accepting bookings* when ready. |
 | **Programs** | Homepage cards, prices, session rules, Kiddie Care rate table, homepage order |
 | **Locations** | Branch name, address, photos, programs offered and payment QR codes (Details tab); the towns that can book it in person (Face-to-face areas tab) and the wider area its online teachers serve (Online areas tab), each built by picking any Philippine province and adding one city or the whole province; and the ↑ ↓ order used on the homepage and booking page |
+| **Families abroad** | Open each location whose online teachers should teach overseas families, go to **Online areas**, choose **Outside the Philippines** and press **Add**. New installs include it for every branch; sites set up before v0.1.15 need this once. |
 | **Payment QR** | Upload each GCash QR (image, account name, number). Mark which ones online parents see, and one default for the How to Pay page. Assign them to locations in Locations. |
 | **Permits / Feedback** | Homepage photo galleries |
 

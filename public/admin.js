@@ -278,7 +278,7 @@ function renderPhotos(){
 const AREA_BY_ID=new Map(AREAS.map(a=>[a.id,a])),PROVINCE_BY_NAME=new Map(PROVINCES.map(p=>[p.name,p]));
 let draftGeo={f2fAreas:[],areas:[]};
 const geoProvince=id=>id.startsWith('province:')?PROVINCES.find(p=>p.id===id)?.name:AREA_BY_ID.get(id)?.region;
-const geoLabel=id=>id.startsWith('province:')?`All of ${geoProvince(id)}`:AREA_BY_ID.has(id)?AREA_BY_ID.get(id).name:id;
+const geoLabel=id=>id==='province:outside-the-philippines'||id==='outside-the-philippines-any-country'?'Families abroad (online only)':id.startsWith('province:')?`All of ${geoProvince(id)}`:AREA_BY_ID.has(id)?AREA_BY_ID.get(id).name:id;
 const geoSort=list=>[...list].sort((a,b)=>(geoProvince(a)||'').localeCompare(geoProvince(b)||'')||(a.startsWith('province:')?-1:b.startsWith('province:')?1:geoLabel(a).localeCompare(geoLabel(b))));
 function renderGeo(key){
   const box=$(key==='f2fAreas'?'#location-f2f-areas':'#location-areas'),list=draftGeo[key];
@@ -288,7 +288,7 @@ function renderGeo(key){
   prov.append(opt('Choose a province',''),...PROVINCES.map(p=>opt(p.name,p.name)));
   const fillCities=()=>{
     const p=PROVINCE_BY_NAME.get(prov.value);city.disabled=!p;add.disabled=!p;
-    city.replaceChildren(...(p?[opt(`All of ${p.name} (every city and municipality)`,p.id),...AREAS.filter(a=>a.region===p.name).map(a=>opt(a.name,a.id))]:[opt('Choose a province first','')]));
+    city.replaceChildren(...(p?p.id==='province:outside-the-philippines'?[opt('Families living outside the Philippines (online only)',p.id)]:[opt(`All of ${p.name} (every city and municipality)`,p.id),...AREAS.filter(a=>a.region===p.name).map(a=>opt(a.name,a.id))]:[opt('Choose a province first','')]));
   };
   prov.addEventListener('change',()=>{fillCities();note.textContent='';});fillCities();
   add.addEventListener('click',()=>{

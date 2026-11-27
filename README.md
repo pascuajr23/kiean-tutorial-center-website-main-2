@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/kiean-logo.webp" alt="KieAn Tutorial Center" width="220">
+<img src="public/assets/kiean-logo.webp" alt="KieAn Tutorial Center" width="220">
 
 # KieAn Tutorial Center
 
@@ -33,6 +33,7 @@ It is built with **no npm dependencies**: one Node.js server, the built-in SQLit
 - **Every program, priced up front.** Tutorials, SPED, playgroup, monthly nursery enrollment and Kiddie Care day, night or walk-in stays, with the total shown before you confirm.
 - **Pay right there.** The last step shows the GCash QR codes for the chosen branch, with a *Save QR image* link for paying from the same phone, plus an optional receipt upload.
 - **Everything in your inbox.** A branded schedule email, the branch's QR codes if still unpaid, and for online lessons one Google Meet link for every session.
+- **Families abroad welcome.** Parents outside the Philippines choose "Outside the Philippines" and book online lessons, with every time also shown in their own time zone and clear notes on pesos and payment.
 - **Works on a slow connection and a small screen.** Loading skeletons, swipeable photo galleries and phone-first layouts.
 
 <p align="center">
@@ -63,7 +64,7 @@ An admin panel at `/admin` runs the whole site, with no code edits:
 ## Built to be trusted
 
 - **Security:** strict Content Security Policy, HSTS, framing blocked, admin sign-in lockout, per-visitor rate limits that understand Cloudflare, abuse limits on bookings, and Google tokens encrypted at rest (AES-256-GCM). Reviewed with Cloudflare's security-audit methodology.
-- **Privacy and Philippine law:** separate privacy consent at booking, a privacy policy naming the Data Protection Officer (Data Privacy Act, RA 10173), seller disclosure on every page and email (Internet Transactions Act, RA 11967), refund, cookie and consent-form pages, and children's names and faces redacted from public photos.
+- **Privacy, child safety and the law:** child-safety rules for online lessons (RA 7610 and RA 11930), rights for families abroad (EU, UK and similar privacy and cancellation rules) alongside Philippine law, separate privacy consent at booking, a privacy policy naming the Data Protection Officer (Data Privacy Act, RA 10173), seller disclosure on every page and email (Internet Transactions Act, RA 11967), refund, cookie and consent-form pages, and children's names and faces redacted from public photos.
 - **Fast and findable:** PageSpeed mobile performance 99, self-hosted fonts, compressed WebP images, structured data, sitemap, canonical URLs and a friendly 404 page.
 - **Safe to run:** an unprivileged, read-only Docker container with a health check, secrets kept out of git and the image, and a test suite that runs without a Google account.
 
@@ -82,9 +83,9 @@ flowchart LR
 | --- | --- |
 | Server, routes, security headers | [`server.mjs`](server.mjs) |
 | Booking rules, Google, email, storage | [`lib/`](lib) |
-| Programs, branches, geo-fence rules, pricing (shared by server and browser) | [`shared.mjs`](shared.mjs) |
-| Every Philippine province, city and municipality (from the PSA's PSGC) | [`ph-areas.mjs`](ph-areas.mjs) |
-| Homepage, booking page, admin | `index.html` + `site.js`, `booking.html` + `booking.js`, `admin.html` + `admin.js` |
+| Programs, branches, geo-fence rules, pricing (shared by server and browser) | [`public/shared.mjs`](public/shared.mjs) |
+| Every Philippine province, city and municipality (from the PSA's PSGC) | [`public/ph-areas.mjs`](public/ph-areas.mjs) |
+| Every page, style, browser script and image the site serves | [`public/`](public) |
 | Tests | [`tests/booking.test.mjs`](tests/booking.test.mjs) |
 | Docker and server templates | [`Dockerfile`](Dockerfile), [`deploy/`](deploy) |
 
