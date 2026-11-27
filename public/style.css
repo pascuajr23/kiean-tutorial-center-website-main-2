@@ -19,7 +19,8 @@
     --orange: #F47A20;
     --orange-dark: #D85F0B;
     --orange-light: #FFF0E5;
-    --orange-ink: #A84A0A; /* orange text on light-orange backgrounds */
+    --orange-ink: #A84A0A; /* small orange text on any light background (5:1+) */
+    --orange-glow: #FF9A4D; /* orange text on navy (5:1) */
 
     --green: #8BCB2E;
     --green-light: #EFF9DF;
@@ -378,7 +379,7 @@ img {
 }
 
 .orange-text {
-    color: var(--orange);
+    color: var(--orange-dark);
 }
 
 .hero-copy > p {
@@ -720,7 +721,7 @@ img {
 }
 
 .section-number {
-    color: var(--orange);
+    color: var(--orange-ink);
 
     font-size: var(--fs-label);
     font-weight: 900;
@@ -733,7 +734,7 @@ img {
 }
 
 .section-kicker span {
-    color: var(--orange);
+    color: var(--orange-ink);
 }
 
 .section-heading h2,
@@ -816,7 +817,7 @@ img {
     border-radius: 50%;
 
     background: var(--yellow-light);
-    color: var(--orange);
+    color: var(--orange-dark);
 
     font-size: 17px;
 }
@@ -891,6 +892,10 @@ img {
 
 .white-kicker {
     color: rgba(255, 255, 255, 0.66);
+}
+
+.white-kicker span {
+    color: var(--orange-glow);
 }
 
 .online-top h2 span {
@@ -1142,7 +1147,7 @@ img {
 }
 
 .schedule-row strong {
-    color: var(--orange);
+    color: var(--orange-ink);
 
     text-align: right;
 
@@ -1184,7 +1189,7 @@ img {
 }
 
 .branch-card > span {
-    color: var(--orange);
+    color: var(--orange-ink);
 
     font-size: var(--fs-label);
     font-weight: 900;
@@ -1255,7 +1260,7 @@ img {
 }
 
 .leadership-heading h2 span {
-    color: var(--orange);
+    color: var(--orange-glow);
 }
 
 .leadership-grid {
@@ -1354,7 +1359,7 @@ img {
 }
 
 .vision-card small {
-    color: var(--orange);
+    color: var(--orange-glow);
 
     font-size: var(--fs-label);
     font-weight: 900;
@@ -1714,7 +1719,7 @@ img {
 }
 
 .investment-number {
-    color: var(--orange);
+    color: var(--orange-ink);
 
     font-size: var(--fs-label);
     font-weight: 900;
@@ -2449,7 +2454,7 @@ img {
 .legal-article h1 { margin: 10px 0 6px; font-family: var(--font-heading); font-size: clamp(30px, 5vw, 42px); line-height: 1.1; color: var(--text); }
 .legal-updated { margin: 0 0 24px; color: var(--muted); font-size: 13px; }
 .legal-article h2 { margin: 30px 0 10px; font-family: var(--font-heading); font-size: 21px; color: var(--blue); }
-.legal-article p, .legal-article li { color: var(--text); font-size: 15px; line-height: 1.75; }
+.legal-article p, .legal-article li { max-width: 36em; color: var(--text); font-size: 15px; line-height: 1.75; }
 .legal-article ul { margin: 0; padding-left: 22px; }
 .legal-article li + li { margin-top: 6px; }
 .legal-article a { color: var(--blue); font-weight: 700; }
@@ -2601,6 +2606,8 @@ a.pay-link { display: inline-block; margin: 4px 0 10px; color: var(--blue); font
    ========================================================= */
 ::selection { background: var(--orange-light); color: var(--text); }
 h2, h3, .permit-grid figcaption { text-wrap: balance; }
+p, li, dd { text-wrap: pretty; }
+.mission-box p { max-width: 36em; }
 
 /* Cards in a row end on the same line: their action sits at the bottom whatever the text length. */
 .branch-card, .investment-card { display: flex; flex-direction: column; }
