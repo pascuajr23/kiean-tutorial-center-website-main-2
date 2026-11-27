@@ -51,6 +51,12 @@ export const DEFAULT_BRANCHES = [
   {id: 'naic', name: 'Ciudad Nuevo, Naic', address: 'Phase 2, Block 2 Lot 3, Ciudad Nuevo, Barangay Timalan Balsahan, Naic, Cavite', programs: ['academic', 'after-school', 'nursery']}
 ].map(b => ({...b, available: true, areas: defaultAreas(b.id), photos: photos(b.id, b.id === 'naic' ? 4 : 2)}));
 // Branch helpers take the current branch list (from config.json on the server, /api/config in the browser).
+// GCash QR codes for a booking: the ones assigned to its location, or those marked for online bookings. Hidden codes never show.
+export function paymentQrsFor(qrs = [], branches = [], branchId) {
+  const live = qrs.filter(q => q.available !== false);
+  if (branchId === 'online') return live.filter(q => q.online);
+  return (branches.find(b => b.id === branchId)?.paymentQrs || []).map(id => live.find(q => q.id === id)).filter(Boolean);
+}
 export const branchById = (branches, id) => branches.find(b => b.id === id);
 export const offers = (branches, branchId, programId) => branchId === 'online' ? programId === 'online' : Boolean(branchById(branches, branchId)?.available !== false && branchById(branches, branchId)?.programs.includes(programId));
 export const areaBranches = (branches, areaId) => branches.filter(b => b.available !== false && b.areas.includes(areaId)).map(b => b.id);

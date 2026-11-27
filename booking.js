@@ -1,4 +1,4 @@
-import {PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
+import {paymentQrsFor,PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
 const $=id=>document.getElementById(id);
 const q=new URLSearchParams(location.search);
 const today=manilaDay();
@@ -185,11 +185,7 @@ function renderReview(){
 function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getLength())));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
 const bookingBranch=()=>state.mode==='online'?'online':state.branch;
 // GCash QR codes for this booking: the ones assigned to the chosen location, or those marked for online bookings.
-function payQrs(){
-  const all=state.paymentQrs||[];
-  if(bookingBranch()==='online')return all.filter(q=>q.online);
-  return (branchById(state.branches,state.branch)?.paymentQrs||[]).map(id=>all.find(q=>q.id===id)).filter(Boolean);
-}
+const payQrs=()=>paymentQrsFor(state.paymentQrs,state.branches,bookingBranch());
 function renderPayQrs(qrs){
   const account=(name,number)=>{const dl=node('dl',undefined,'pay-account');for(const [dt,dd] of [['Account name',name],['GCash number',number],['Amount','The total above']]){const row=node('div');row.append(node('dt',dt),node('dd',dd));dl.append(row);}return dl;};
   if(!qrs.length){
@@ -276,7 +272,7 @@ $('booking-form').addEventListener('submit',async event=>{
 function showConfirmation(b){
   for(let i=1;i<=3;i++)$('step-'+i).hidden=true;
   document.querySelectorAll('.booking-steps li').forEach(li=>{li.classList.add('done');li.removeAttribute('aria-current');li.querySelector('button').disabled=true;});
-  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':b.sessions.length===1?'Your session was added to your teacher’s Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'),node('p',`Total: ${totalLabel(b.total)} · ${b.paid?'Receipt received — the center will verify your payment.':'Not yet paid.'}`,'confirmation-total'),...(b.paid||b.preview?[]:[Object.assign(node('a','How to pay with GCash →','pay-link'),{href:'/payment',target:'_blank',rel:'noopener'})]),...(b.preview?[]:[node('p',b.online?'Your schedule and a Google Calendar invitation from KieAn, with one Google Meet link for every session, were sent to your email.':'Your full schedule has been sent to your email.')]));
+  const panel=$('confirmation');panel.replaceChildren(node('div',b.preview?'✦':'✓','confirmation-icon'),node('h2',b.preview?'Your learning plan is ready to preview.':'Your sessions are booked.'),node('p',b.preview?'This preview has not reserved any sessions or updated Google Calendar.':b.sessions.length===1?'Your session was added to your teacher’s Google Calendar.':`All ${b.sessions.length} sessions were added to your teacher’s Google Calendar.`),node('p',b.reference,'reference'),node('p',`Total: ${totalLabel(b.total)} · ${b.paid?'Receipt received — the center will verify your payment.':'Not yet paid.'}`,'confirmation-total'),...(b.paid||b.preview?[]:[Object.assign(node('a','How to pay with GCash →','pay-link'),{href:`/payment?branch=${encodeURIComponent(bookingBranch())}`,target:'_blank',rel:'noopener'})]),...(b.preview?[]:[node('p',b.online?'Your schedule and a Google Calendar invitation from KieAn, with one Google Meet link for every session, were sent to your email.':'Your full schedule has been sent to your email.')]));
   const review=node('div',undefined,'review-box');review.append(node('h3',b.teacherName),...sessionRows(b.sessions,b.time));panel.append(review);
   const actions=node('div',undefined,'panel-actions');const download=node('button',b.preview?'Download preview calendar':'Download my calendar','btn btn-orange');download.type='button';download.addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([icsForBooking(b)],{type:'text/calendar;charset=utf-8'}));const a=node('a');a.href=url;a.download=b.preview?'kiean-preview.ics':`kiean-${b.reference}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);});const again=node('a','Start a new booking','btn btn-outline');again.href='/booking';actions.append(download,again);panel.append(actions,node('p',b.preview?'Live booking opens after the center connects its teachers and calendars.':'Save this reference and quote it whenever you contact the center about payment or changes.'));panel.hidden=false;panel.focus();
 }

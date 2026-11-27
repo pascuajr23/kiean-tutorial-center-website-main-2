@@ -7,9 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Teacher availability | KieAn Tutorial Center</title>
   <link rel="icon" href="assets/kiean-icon.png">
-  <link rel="stylesheet" href="style.css?v=20261127-1">
-  <link rel="stylesheet" href="admin.css?v=20261127-1">
-  <link rel="stylesheet" href="admin-responsive.css?v=20261127-1">
+  <link rel="stylesheet" href="style.css?v=20261127-2">
+  <link rel="stylesheet" href="admin.css?v=20261127-2">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261127-2">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -106,6 +106,7 @@
         <label class="admin-field">GCash number<input name="number" required maxlength="24" inputmode="tel" autocomplete="off" placeholder="0917 123 4567"></label>
         <label class="availability-switch"><input type="checkbox" name="online"> Use for online tutorial bookings</label>
         <label class="availability-switch"><input type="checkbox" name="available"> Show on booking page</label>
+        <label class="availability-switch"><input type="checkbox" name="default"> Default QR on the How to Pay page <span class="field-note">(only one QR can be the default)</span></label>
         <p id="qr-used" class="selection-hint"></p>
         <small id="qr-status" class="file-count" role="status" aria-live="polite"></small>
       </div>
@@ -163,6 +164,6 @@
       <div class="location-actions"><button id="delete-cancel" class="button button-secondary" type="button">Cancel</button><button id="delete-next" class="button button-danger" type="submit">Continue</button></div>
     </form>
   </dialog>
-  <script type="module" src="admin.js?v=20261127-1"></script>
+  <script type="module" src="admin.js?v=20261127-2"></script>
 </body>
 </html>

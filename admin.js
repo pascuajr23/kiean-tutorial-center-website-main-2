@@ -302,7 +302,7 @@ function qrCard(q){
   const head=node('div','summary-head'),title=node('div','summary-title'),tags=node('div','summary-tags'),img=node('img','qr-thumb');
   img.src='/'+q.image;img.alt='';img.loading='lazy';
   const tag=(text,kind)=>{const t=node('span','summary-tag',text);t.dataset.kind=kind;tags.append(t);};
-  tag(q.available?'On booking page':'Hidden',q.available?'on':'off');if(q.online)tag('Online bookings','on');
+  tag(q.available?'On booking page':'Hidden',q.available?'on':'off');if(q.online)tag('Online bookings','on');if(q.default)tag('How to Pay default','on');
   title.append(node('strong','',qrTitle(q)),tags);head.append(img,title);card.append(head);
   const users=qrUsers(q),meta=node('dl','summary-meta');
   for(const [label,value] of [['Name',q.name],['Number',q.number],['Used by',users.length?users.join(', '):'No location yet']]){const row=node('div');row.append(node('dt','',label),node('dd','',value));meta.append(row);}
@@ -314,7 +314,7 @@ function openQr(q){
   editingQr=q?.id||null;draftQrImage=q?.image||null;showQrImage();
   $('#qr-editor-title').textContent=q?qrTitle(q):'New payment QR code';
   qrForm.elements.label.value=q?.label||'';qrForm.elements.name.value=q?.name||'';qrForm.elements.number.value=q?.number||'';
-  qrForm.elements.online.checked=Boolean(q?.online);qrForm.elements.available.checked=q?q.available:true;
+  qrForm.elements.online.checked=Boolean(q?.online);qrForm.elements.default.checked=Boolean(q?.default);qrForm.elements.available.checked=q?q.available:true;
   const users=q?qrUsers(q):[];$('#qr-used').textContent=q?(users.length?`Used by: ${users.join(', ')}. Change this in Locations.`:'Not assigned to any location yet. Assign it in Locations.'):'After saving, open a location and tick this QR code under Payment QR codes.';
   $('#qr-status').textContent='';const off=q&&!q.available&&!users.length;$('#delete-qr').hidden=!off;$('#qr-delete-hint').hidden=!q||off;
   qrEditor.showModal();qrForm.elements.label.focus();
@@ -341,8 +341,10 @@ qrForm.addEventListener('submit',event=>{
   if(!draftQrImage){$('#qr-status').textContent='Upload the QR code image first.';return;}
   const f=qrForm.elements,current=paymentQrs.find(q=>q.id===editingQr),label=f.label.value.trim(),name=f.name.value.trim();
   let id=current?.id;if(!id){const base=slug(label||name)||'qr';id=base;for(let n=2;paymentQrs.some(q=>q.id===id);n++)id=`${base}-${n}`;}
-  const qr={id,label,name,number:f.number.value.trim(),image:draftQrImage,online:f.online.checked,available:f.available.checked};
-  saveQrs(current?paymentQrs.map(q=>q.id===id?qr:q):[...paymentQrs,qr],`${qrTitle(qr)} saved.${current?'':' Now assign it to its locations in Locations.'}`);
+  const qr={id,label,name,number:f.number.value.trim(),image:draftQrImage,online:f.online.checked,default:f.default.checked,available:f.available.checked};
+  // Ticking "default" on this QR moves the default off whichever QR had it.
+  const others=paymentQrs.map(q=>qr.default&&q.id!==id?{...q,default:false}:q);
+  saveQrs(current?others.map(q=>q.id===id?qr:q):[...others,qr],`${qrTitle(qr)} saved.${current?'':' Now assign it to its locations in Locations.'}`);
 });
 $('#delete-qr').addEventListener('click',async()=>{
   const current=paymentQrs.find(q=>q.id===editingQr);if(!current||current.available||qrUsers(current).length)return;

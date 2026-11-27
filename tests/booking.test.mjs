@@ -10,9 +10,9 @@ import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
-import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig} from '../lib/config.mjs';
+import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs} from '../lib/config.mjs';
 import {createApp,clientIp} from '../server.mjs';
-import {icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
+import {paymentQrsFor,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true,privacyConsent:true});
@@ -529,10 +529,15 @@ test('SEO and policy pages: clean URLs, robots, sitemap, canonical tags and a fr
 
 test('unpaid parent emails link to the GCash payment page; paid ones do not',()=>{
   const booking={...validateBooking(payload(),config,NOW),id:'b1',reference:'KTC-TEST0001',paid:false,meetLink:'https://meet.google.com/abc-defg-hij'};
-  const unpaid=parentScheduleEmail(booking);
-  assert.match(unpaid.html,new RegExp(`href="${PAYMENT_URL}"`));assert.match(unpaid.html,/Pay by GCash, then reply to this email with your receipt/);
-  assert.match(unpaid.text,new RegExp(`How to pay: ${PAYMENT_URL}`));
-  const paid=parentScheduleEmail({...booking,paid:true});
+  const qr={id:'gcash-online',name:'Kierlle Piad',number:'0917 123 4567',image:'branch-photos/'+'c'.repeat(24)+'.png',online:true};
+  const unpaid=parentScheduleEmail(booking,[qr]);
+  assert.match(unpaid.html,new RegExp(`href="${PAYMENT_URL}\\?branch=online"`));assert.match(unpaid.html,/Pay by GCash, then reply to this email with your receipt/);
+  assert.match(unpaid.text,new RegExp(`How to pay: ${PAYMENT_URL}\\?branch=online`));
+  // the booked location's QR code: image from the website plus the name and number as text
+  assert.match(unpaid.html,new RegExp(`src="https://kieantutorial.com/branch-photos/c{24}.png"`));assert.match(unpaid.html,/Kierlle Piad/);assert.match(unpaid.html,/0917 123 4567/);
+  assert.match(unpaid.text,/GCash: Kierlle Piad · 0917 123 4567/);
+  assert.doesNotMatch(parentScheduleEmail(booking).html,/PAY BY GCASH/,'no QR block when the location has none');
+  const paid=parentScheduleEmail({...booking,paid:true},[qr]);assert.doesNotMatch(paid.html,/branch-photos/);
   assert.doesNotMatch(paid.html,/kieantutorial.com\/payment/);assert.doesNotMatch(paid.text,/How to pay/);
   assert.doesNotMatch(teacherEmail(booking,'teacher@example.test',[]).html,/kieantutorial.com\/payment/,'teachers do not get the payment link');
 });
@@ -668,4 +673,15 @@ test('payment QR codes: uploaded once, assigned to many locations, shown per loc
   assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[gt],remove:{id:laguna.id,name:'KieAn'}})).status,409);
   assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[gt],remove:{id:laguna.id,name:laguna.name}})).status,200);
   assert.equal((await fetch(base+'/api/admin/payment-qrs',{method:'POST',headers:{...auth,Origin:'https://attacker.example'},body:'{}'})).status,403);
+});
+
+test('payment QR rules: location codes, online codes, hidden codes never show; one default QR, which must be shown',()=>{
+  const img='branch-photos/'+'d'.repeat(24)+'.png',q=(id,extra={})=>({id,name:'Name '+id,number:'0917 000 0000',image:img,...extra});
+  const qrs=[q('qa',{online:true}),q('qb'),q('qc',{available:false})],branches=[{id:'pila',paymentQrs:['qb','qc','qa']},{id:'naic'}];
+  assert.deepEqual(paymentQrsFor(qrs,branches,'pila').map(x=>x.id),['qb','qa']);
+  assert.deepEqual(paymentQrsFor(qrs,branches,'online').map(x=>x.id),['qa']);
+  assert.deepEqual(paymentQrsFor(qrs,branches,'naic'),[]);
+  assert.equal(validatePaymentQrs([q('qa',{default:true}),q('qb')])[0].default,true);
+  assert.throws(()=>validatePaymentQrs([q('qa',{default:true}),q('qb',{default:true})]),/Only one QR code/);
+  assert.throws(()=>validatePaymentQrs([q('qa',{default:true,available:false})]),/turn on “Show on booking page”/);
 });
