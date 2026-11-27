@@ -8,7 +8,7 @@ ENV NODE_ENV=production \
     KIEAN_DATA_DIR=/var/lib/kiean
 # Least-changing files first so code edits reuse the cached image layers.
 COPY assets ./assets
-COPY package.json server.mjs shared.mjs ./
+COPY package.json server.mjs shared.mjs ph-areas.mjs ./
 COPY lib ./lib
 COPY scripts ./scripts
 COPY index.html booking.html admin.html admin-login.html 404.html \

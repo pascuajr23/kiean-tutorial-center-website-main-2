@@ -72,4 +72,22 @@
 .qr-summary .qr-thumb{width:64px;height:64px;flex:none}
 .field-note{font-weight:500}
 @media(max-width:520px){.qr-upload{grid-template-columns:1fr}}
+/* Location editor tabs */
+.loc-tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.loc-tab{flex:none;min-height:44px;padding:0 12px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);font:700 var(--fs-small) var(--font-body),Arial,sans-serif;cursor:pointer}
+.loc-tab[aria-selected=true]{border-bottom-color:var(--orange);color:var(--blue)}
+.loc-tab:focus-visible{outline:3px solid #24529a40;outline-offset:-3px}
+.loc-tab-count{display:inline-block;min-width:20px;margin-left:4px;padding:1px 6px;border-radius:999px;background:var(--light-bg);color:var(--muted);font-size:11px}
+.loc-panel{display:grid;gap:var(--space-2)}
+.location-order{display:flex;gap:8px}.location-order .button{min-height:36px;flex:1;font-size:16px}
+/* Geo-fence list builder */
+.geo-builder{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) auto;gap:8px}
+.geo-builder select{min-width:0;height:44px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;background:var(--white);color:var(--text);font:500 14px var(--font-body),Arial,sans-serif}
+.geo-builder select:disabled{color:var(--muted);background:var(--light-bg)}
+.geo-list{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0;padding:0;list-style:none}
+.geo-chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 4px 4px 10px;border:1px solid var(--border);border-radius:999px;background:var(--white);font-size:13px;color:var(--text)}
+.geo-chip small{color:var(--muted);font-size:11px}
+.geo-chip-whole{border-color:var(--blue);background:var(--blue-light);color:var(--blue);font-weight:700}
+.geo-chip .file-remove{width:28px;height:28px;font-size:16px}
+@media(max-width:520px){.geo-builder{grid-template-columns:1fr}}
 

@@ -10,9 +10,9 @@ import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
-import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs} from '../lib/config.mjs';
+import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs,validateBranches} from '../lib/config.mjs';
 import {createApp,clientIp} from '../server.mjs';
-import {paymentQrsFor,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
+import {paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true,privacyConsent:true});
@@ -226,6 +226,8 @@ test('static files get cache headers; pages and API stay uncached',async t=>{
   const base='http://127.0.0.1:'+app.address().port,cc=async path=>(await fetch(base+path)).headers.get('cache-control');
   assert.equal(await cc('/assets/kiean-logo.webp'),'public, max-age=604800');
   assert.equal(await cc('/style.css?v=1'),'public, max-age=31536000, immutable');
+  // the browser imports the all-Philippines place list through shared.mjs
+  assert.equal((await fetch(base+'/ph-areas.mjs')).status,200);assert.equal(await cc('/ph-areas.mjs'),'no-cache');
   assert.equal(await cc('/style.css'),'no-cache');
   assert.equal(await cc('/index.html'),'no-store');
   assert.equal(await cc('/api/config'),'no-store');
@@ -253,7 +255,16 @@ test('branch bookings must match the parent area and the branch programs (PDF ge
   assert.throws(()=>validateBooking({...base,area:undefined},config,NOW),/does not serve your area/);
   assert.throws(()=>validateBooking({...base,program:'kiddie-care',area:'laguna-pila',hours:4},config,NOW),/does not offer/);
   assert.equal(validateBooking({...payload(),area:'cavite-imus'},config,NOW).branch,'online');
-  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'cavite-naic'),['san-francisco']);
+  // Face to face: the four General Trias branches take General Trias; Naic, San Pedro and Pila take their own town.
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'cavite-general-trias'),['natania','south-square','san-francisco','maliksi']);
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'cavite-naic'),['naic']);
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'laguna-san-pedro'),['san-pedro']);
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'laguna-pila'),['pila']);
+  // Everywhere else in the geo-fence is online only: no branch in person, but online teachers still serve it.
+  assert.deepEqual(areaBranches(DEFAULT_BRANCHES,'cavite-imus'),[]);
+  assert.throws(()=>validateBooking({...base,branch:'natania',area:'cavite-imus'},config,NOW),/does not serve your area/);
+  assert.equal(teacherServes({branches:['online','natania']},'cavite-imus',DEFAULT_BRANCHES),true);
+  assert.equal(teacherServes({branches:['online','natania']},'laguna-pila',DEFAULT_BRANCHES),false);
 });
 function classHarness(t,weekly){
   const teacher={...config.teachers[0],programs:PROGRAMS.map(p=>p.id),branches:['online','natania','south-square','pila'],weekly};
@@ -273,7 +284,7 @@ test('group classes share a period up to its class size, and tutoring cannot use
 test('Kiddie Care prices day, night, walk-in and monthly stays from the rate card',async t=>{
   const week=Object.fromEntries([1,2,3,4,5].map(n=>[n,[['07:00','19:00','kiddie-care',10],['19:00','07:00','kiddie-night',4]]]));
   const teacher={...config.teachers[0],programs:['kiddie-care'],branches:['south-square'],weekly:week};
-  const cfg={...config,teachers:[teacher]},base={...payload(),program:'kiddie-care',branch:'south-square',area:'cavite-imus',dates:['2030-06-03','2030-06-04'],time:'08:00',needs:'regular'};
+  const cfg={...config,teachers:[teacher]},base={...payload(),program:'kiddie-care',branch:'south-square',area:'cavite-general-trias',dates:['2030-06-03','2030-06-04'],time:'08:00',needs:'regular'};
   const day=validateBooking({...base,care:'day',hours:4},cfg,NOW);
   assert.equal(day.slotMinutes,240);assert.equal(day.sessions[0].end,'2030-06-03T04:00:00.000Z');assert.equal(day.total,460);assert.equal(day.sessions[0].seats,10);
   assert.equal(validateBooking({...base,care:'day',hours:6,needs:'special',tutorial:true},cfg,NOW).total,1700);
@@ -293,7 +304,7 @@ test('Kiddie Care prices day, night, walk-in and monthly stays from the rate car
 });
 test('Nursery enrollment is exactly 20 class days at the monthly fee',()=>{
   const teacher={...config.teachers[0],programs:['nursery'],branches:['naic'],weekly:Object.fromEntries([1,2,3,4,5].map(n=>[n,[['09:00','10:30','nursery',5]]]))};
-  const cfg={...config,teachers:[teacher]},base={...payload(),program:'nursery',branch:'naic',area:'cavite-silang',time:'09:00'};
+  const cfg={...config,teachers:[teacher]},base={...payload(),program:'nursery',branch:'naic',area:'cavite-naic',time:'09:00'};
   const b=validateBooking({...base,dates:weekdays(20)},cfg,NOW);assert.equal(b.total,2500);assert.equal(b.slotMinutes,90);
   assert.throws(()=>validateBooking({...base,dates:weekdays(21)},cfg,NOW),/Choose 20 class dates/);
 });
@@ -317,9 +328,12 @@ test('browser location maps to the right geo-fence area',()=>{
   assert.equal(matchArea({city:'Rosario',province:'Cavite'})?.id,'cavite-rosario');
   assert.equal(matchArea({city:'Quezon City',state:'Metro Manila'})?.id,'metro-manila-quezon-city');
   assert.equal(matchArea({city:'Biñan',province:'Laguna'})?.id,'laguna-binan');
-  assert.equal(matchArea({town:'Iba',province:'Zambales'})?.id,'other-luzon-zambales');
-  assert.equal(matchArea({town:'Quezon',province:'Quezon'})?.id,'other-luzon-quezon-province');
-  assert.equal(matchArea({town:'Malolos',province:'Bulacan'}),null);
+  // every Philippine city and municipality is in the list now, not only the starting geo-fence
+  assert.equal(matchArea({town:'Iba',province:'Zambales'})?.id,'zambales-iba');
+  assert.equal(matchArea({town:'Quezon',province:'Quezon'})?.id,'quezon-quezon');
+  assert.equal(matchArea({city:'City of Malolos',province:'Bulacan'})?.id,'bulacan-malolos');
+  assert.equal(matchArea({city:'Cebu City',state:'Cebu'})?.id,'cebu-cebu-city');
+  assert.equal(matchArea({city:'Tarlac City',state:'Tarlac'})?.id,'tarlac-tarlac-city');
   assert.equal(matchArea({}),null);
 });
 test('online teachers follow the same geo-fence through their own branches',()=>{
@@ -368,7 +382,7 @@ test('admin manages locations: add, photos, in-use protection, and booking picks
   const saved=await post('/api/admin/branches',{branches:[...cfg.branches,fresh]});assert.equal(saved.status,200);
   assert.equal(JSON.parse(readFileSync(configPath,'utf8')).branches.at(-1).id,'dasma');
   assert(cfg.teachers[0].branches.includes('dasma'),'new locations go to teacher-1 by default');assert((await saved.json()).teachers[0].branches.includes('dasma'));
-  assert.deepEqual(areaBranches(cfg.branches,'cavite-dasmarinas'),['natania','south-square','maliksi','dasma']);
+  assert.deepEqual(areaBranches(cfg.branches,'cavite-dasmarinas'),['dasma'],'a new location without face-to-face areas uses its online list');
   const pub=await (await fetch(base+'/api/config')).json();assert.equal(pub.branches.at(-1).address,'Somewhere, Dasmariñas, Cavite');
   // teachers can now use the new location; bookings there pass the geo-fence
   assert.doesNotThrow(()=>validateTeacherRoster([{...config.teachers[0],branches:['online','dasma']}],cfg.branches));
@@ -379,6 +393,15 @@ test('admin manages locations: add, photos, in-use protection, and booking picks
   assert.equal((await post('/api/admin/branches',{branches:cfg.branches.map(b=>b.id==='pila'?{...b,available:false}:b)})).status,200);
   const res=await post('/api/admin/branches',{branches:cfg.branches.filter(b=>b.id!=='pila'),remove:{id:'pila',name:'Pila, Laguna'}});assert.equal(res.status,409);assert.match((await res.json()).error,/Pila, Laguna still has teachers/);
   assert.equal((await post('/api/admin/branches',{branches:[{...fresh,areas:['mars']}]})).status,400);
+  assert.equal((await post('/api/admin/branches',{branches:[...cfg.branches,{...fresh,f2fAreas:['mars']}]})).status,400);
+  // face-to-face areas save separately from online areas, and a new order is kept for the homepage and booking page
+  const moved=[...cfg.branches].reverse().map(b=>b.id==='naic'?{...b,f2fAreas:['cavite-naic','cavite-tanza']}:b);
+  assert.equal((await post('/api/admin/branches',{branches:moved})).status,200);
+  const saved2=JSON.parse(readFileSync(configPath,'utf8')).branches;
+  assert.deepEqual(saved2.map(b=>b.id),moved.map(b=>b.id));
+  assert.deepEqual(saved2.find(b=>b.id==='naic').f2fAreas,['cavite-naic','cavite-tanza']);
+  assert.deepEqual(areaBranches(cfg.branches,'cavite-tanza'),['naic']);
+  assert.deepEqual((await (await fetch(base+'/api/config')).json()).branches.map(b=>b.id),moved.map(b=>b.id));
   assert.equal((await post('/api/admin/branches',{branches:[{...fresh,photos:['../config.json']}]})).status,400);
   assert.equal((await fetch(base+'/api/admin/branches',{method:'POST',headers:{...auth,Origin:'https://attacker.example'},body:'{}'})).status,403);
 });
@@ -684,4 +707,24 @@ test('payment QR rules: location codes, online codes, hidden codes never show; o
   assert.equal(validatePaymentQrs([q('qa',{default:true}),q('qb')])[0].default,true);
   assert.throws(()=>validatePaymentQrs([q('qa',{default:true}),q('qb',{default:true})]),/Only one QR code/);
   assert.throws(()=>validatePaymentQrs([q('qa',{default:true,available:false})]),/turn on “Show on booking page”/);
+});
+
+test('geo-fences cover the whole Philippines: whole provinces or single cities, and old saved areas upgrade',()=>{
+  assert.equal(AREAS.length,1634);
+  assert(inGeoFence(['province:cebu'],'cebu-cebu-city'));assert(inGeoFence(['province:cebu'],'cebu-mandaue'));
+  assert(!inGeoFence(['province:cebu'],'bohol-tagbilaran'));
+  assert(inGeoFence(['bohol-tagbilaran'],'bohol-tagbilaran'));assert(!inGeoFence(['bohol-tagbilaran'],'bohol-panglao'));
+  assert(!inGeoFence(['province:cebu'],'not-a-place'));
+  // the old fixed list's entries become new city ids or whole provinces
+  assert.deepEqual(upgradeAreas(['other-luzon-zambales','cavite-general-trias']),['province:zambales','cavite-general-trias']);
+  assert.deepEqual(upgradeAreas(['other-luzon-pampanga-angeles-to-arayat']),['pampanga-angeles','pampanga-apalit','pampanga-arayat']);
+  assert.deepEqual(upgradeAreas(['batangas-mataas-na-kahoy','metro-manila-pasay']),['batangas-mataas-na-kahoy','metro-manila-pasay']);
+  // a branch saved with old ids validates and is upgraded; unknown places are refused
+  const [b]=validateBranches([{...DEFAULT_BRANCHES[0],areas:['other-luzon-bicol-region'],f2fAreas:['laguna-san-pedro']}]);
+  assert(b.areas.includes('province:albay')&&b.areas.includes('province:sorsogon'));
+  assert.throws(()=>validateBranches([{...DEFAULT_BRANCHES[0],areas:['province:atlantis']}]),/online service areas/);
+  // a Cebu family sees online teachers from a branch whose online area includes Cebu, and no branch in person
+  const cebu=DEFAULT_BRANCHES.map(x=>x.id==='natania'?{...x,areas:[...x.areas,'province:cebu']}:x);
+  assert.equal(teacherServes({branches:['online','natania']},'cebu-cebu-city',cebu),true);
+  assert.deepEqual(areaBranches(cebu,'cebu-cebu-city'),[]);
 });

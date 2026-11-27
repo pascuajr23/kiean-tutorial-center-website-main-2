@@ -19,4 +19,8 @@ The self-hosted fonts in `assets/fonts/` are licensed under the SIL Open Font Li
 | DM Sans | `dm-sans-latin.woff2`, `dm-sans-latin-ext.woff2` | [OFL-DMSans.txt](assets/fonts/OFL-DMSans.txt) |
 | Nunito | `nunito-latin.woff2`, `nunito-latin-ext.woff2` | [OFL-Nunito.txt](assets/fonts/OFL-Nunito.txt) |
 
+## Place names
+
+[`ph-areas.mjs`](ph-areas.mjs) lists every Philippine province, city and municipality, derived from the Philippine Statistics Authority's Philippine Standard Geographic Code (PSGC), via the open-data API at [psgc.gitlab.io](https://psgc.gitlab.io).
+
 The project has no other third-party code: the server and browser code use only Node.js and web platform built-ins.

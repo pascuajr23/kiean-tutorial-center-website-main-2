@@ -1,3 +1,4 @@
+import {PH_PLACES, LEGACY_AREAS, DEFAULT_ONLINE_AREAS} from './ph-areas.mjs';
 const TIME_ZONE = 'Asia/Manila';
 export const MAX_SESSIONS = 40;
 export const HORIZON_DAYS = 180;
@@ -27,19 +28,23 @@ export const DEFAULT_PROGRAMS = [
   { id: 'field-trip', name: 'Educational Tour / Field Trip', link: '', icon: '🚌', tagline: 'Let the adventure begin outside the classroom', description: 'Mind Museum, Tales of Illumina, Manuel L. Quezon Museum, Presidential Car Museum, KKK Museum and El Deposito. Full payment is required to reserve a seat.', details: ['October 3, 2026', 'Cavite branches: ₱2,500 / person'], price: 'Pila, Laguna: ₱2,830 / person', linkText: 'Inquire about this program →' },
 ];
 // Geo-fence places (portfolio pp. 35–39). Which branch serves which place is branch data (see DEFAULT_BRANCHES and /admin).
-// Defaults: Branch 1 (General Trias) = the Pasong Kawayan II branches; Branch 2 (General Trias) = San Francisco.
-const B1 = ['natania', 'south-square', 'maliksi'], B2 = ['san-francisco'], B3 = ['naic'], B4 = ['san-pedro'], B5 = ['pila'];
-const AREA_LIST = {
-  'Metro Manila': {'Quezon City': B1, 'Manila': B2, 'San Juan': B2, 'Mandaluyong': B2, 'Pasig': B2, 'Marikina': B2, 'Makati': B3, 'Taguig': B3, 'Pasay': B4, 'Muntinlupa': B4, 'Pateros': B4, 'Parañaque': B4, 'Las Piñas': B4, 'Caloocan': B5, 'Valenzuela': B5, 'Malabon': B5, 'Navotas': B5},
-  'Cavite': {'General Trias': B1, 'Trece Martires': B1, 'Imus': B1, 'Dasmariñas': B1, 'Bacoor': B1, 'Tagaytay': B1, 'Kawit': B1, 'Noveleta': B1, 'Rosario': B2, 'Tanza': B2, 'Naic': B2, 'Maragondon': B2, 'Magallanes': B2, 'General Emilio Aguinaldo': B2, 'Silang': B3, 'Carmona': B3, 'General Mariano Alvarez': B3, 'Alfonso': B3, 'Amadeo': B3, 'Indang': B3, 'Mendez': B3},
-  'Laguna': {'San Pedro': B4, 'Biñan': B4, 'Santa Rosa': B4, 'Cabuyao': B4, 'Calamba': B4, 'San Pablo': B4, 'Alaminos': B4, 'Bay': B4, 'Calauan': B4, 'Cavinti': B4, 'Famy': B4, 'Kalayaan': B4, 'Pila': B5, 'Santa Cruz': B5, 'Pagsanjan': B5, 'Lumban': B5, 'Paete': B5, 'Pakil': B5, 'Pangil': B5, 'Magdalena': B5, 'Majayjay': B5, 'Liliw': B5, 'Nagcarlan': B5, 'Rizal': B5, 'Victoria': B5, 'Los Baños': B5, 'Luisiana': B5},
-  'Batangas': {'Batangas City': B1, 'Tanauan': B1, 'Santo Tomas': B1, 'Lipa': B1, 'Rosario': B2, 'San Juan': B2, 'Padre Garcia': B2, 'Ibaan': B2, 'Lobo': B3, 'San Pascual': B3, 'Bauan': B3, 'Alitagtag': B3, 'Cuenca': B3, 'Nasugbu': B4, 'Calatagan': B4, 'Tuy': B4, 'Balayan': B4, 'Calaca': B4, 'Lemery': B4, 'Lian': B5, 'Talisay': B5, 'Laurel': B5, 'Agoncillo': B5, 'San Nicolas': B5, 'Mataas na Kahoy': B5},
-  'Other Luzon': {'Bataan': B1, 'Bulacan (Angat to Hagonoy)': B1, 'Pampanga (Angeles to Arayat)': B1, 'Nueva Ecija': B2, 'Tarlac (Tarlac City to Camiling)': B2, 'Pampanga (San Fernando to Sasmuan)': B3, 'Zambales': B3, 'Quezon Province': B3, 'Bicol Region': B3, 'MIMAROPA': B4, 'Rizal Province': B5}
-};
 export const slug = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-export const AREAS = Object.entries(AREA_LIST).flatMap(([region, places]) => Object.keys(places).map(name => ({id: slug(region + ' ' + name), region, name})));
-const defaultAreas = branchId => Object.entries(AREA_LIST).flatMap(([region, places]) => Object.entries(places).filter(([, ids]) => ids.includes(branchId)).map(([name]) => slug(region + ' ' + name)));
+// Every Philippine city and municipality as {id, region (its province), name}; ids look like "cavite-general-trias".
+export const AREAS = PH_PLACES.flatMap(([region, places]) => places.map(name => ({id: slug(region + ' ' + name), region, name})));
+const AREA_BY_ID = new Map(AREAS.map(a => [a.id, a]));
+// A geo-fence lists city ids and whole provinces ("province:cavite" = every city and municipality in Cavite).
+export const PROVINCES = PH_PLACES.map(([name]) => ({id: 'province:' + slug(name), name}));
+const PROVINCE_IDS = new Set(PROVINCES.map(p => p.id));
+export const isGeoEntry = id => AREA_BY_ID.has(id) || PROVINCE_IDS.has(id);
+export const inGeoFence = (list = [], areaId) => { const a = AREA_BY_ID.get(areaId); return Boolean(a) && (list.includes(areaId) || list.includes('province:' + slug(a.region))); };
+// Areas saved before the all-Philippines list become their new city ids or whole provinces.
+export const upgradeAreas = (list = []) => [...new Set(list.flatMap(id => LEGACY_AREAS[id] ?? [id]))];
 const photos = (id, n) => Array.from({length: n}, (_, i) => `assets/branch-${id}-${i + 1}.webp`);
+// Face-to-face geo-fence: families in these places can book the branch in person. Every other area in a branch's
+// (online) list reaches it through online teachers only. The four General Trias branches take General Trias families;
+// Naic, San Pedro and Pila take their own town.
+const GENERAL_TRIAS = ['cavite-general-trias'];
+export const DEFAULT_F2F_AREAS = {natania: GENERAL_TRIAS, 'south-square': GENERAL_TRIAS, maliksi: GENERAL_TRIAS, 'san-francisco': GENERAL_TRIAS, naic: ['cavite-naic'], 'san-pedro': ['laguna-san-pedro'], pila: ['laguna-pila']};
 // The branches KieAn starts with (portfolio pp. 16–18, 27–39). Live branches are edited in /admin and saved in config.json.
 export const DEFAULT_BRANCHES = [
   {id: 'san-pedro', name: 'San Pedro, Laguna', address: 'Block 22 Lot 4, Unit E, 2nd Floor, Chrysanthemum Village, San Pedro, Laguna', programs: ['academic', 'after-school', 'sped', 'playgroup'], rates: {academic: 250, sped: 400}},
@@ -49,7 +54,7 @@ export const DEFAULT_BRANCHES = [
   {id: 'san-francisco', name: 'San Francisco', address: 'Phase 1, Block 27 Lot 36, Tierra Nevada, Barangay San Francisco, General Trias, Cavite', programs: ['academic', 'after-school', 'sped', 'nursery']},
   {id: 'maliksi', name: 'Maliksi Heroes-Town', address: '2F, Block 21 Lots 30–32, Unit 2, Phase 1, Pamayanang Maliksi, Barangay Pasong Kawayan II, General Trias, Cavite', programs: ['academic', 'after-school', 'sped', 'playgroup']},
   {id: 'naic', name: 'Ciudad Nuevo, Naic', address: 'Phase 2, Block 2 Lot 3, Ciudad Nuevo, Barangay Timalan Balsahan, Naic, Cavite', programs: ['academic', 'after-school', 'nursery']}
-].map(b => ({...b, available: true, areas: defaultAreas(b.id), photos: photos(b.id, b.id === 'naic' ? 4 : 2)}));
+].map(b => ({...b, available: true, f2fAreas: DEFAULT_F2F_AREAS[b.id], areas: DEFAULT_ONLINE_AREAS[b.id], photos: photos(b.id, b.id === 'naic' ? 4 : 2)}));
 // Branch helpers take the current branch list (from config.json on the server, /api/config in the browser).
 // GCash QR codes for a booking: the ones assigned to its location, or those marked for online bookings. Hidden codes never show.
 export function paymentQrsFor(qrs = [], branches = [], branchId) {
@@ -59,9 +64,12 @@ export function paymentQrsFor(qrs = [], branches = [], branchId) {
 }
 export const branchById = (branches, id) => branches.find(b => b.id === id);
 export const offers = (branches, branchId, programId) => branchId === 'online' ? programId === 'online' : Boolean(branchById(branches, branchId)?.available !== false && branchById(branches, branchId)?.programs.includes(programId));
-export const areaBranches = (branches, areaId) => branches.filter(b => b.available !== false && b.areas.includes(areaId)).map(b => b.id);
-// Online teachers follow the same geo-fence: they serve the areas of their own branches.
-export const teacherServes = (teacher, areaId, branches) => Boolean(areaId) && teacher.branches.some(b => b !== 'online' && areaBranches(branches, areaId).includes(b));
+// A branch saved before the face-to-face geo-fence existed uses its default list, or its online list for a new branch.
+export const f2fAreasOf = b => upgradeAreas(b.f2fAreas ?? DEFAULT_F2F_AREAS[b.id] ?? b.areas);
+// Branches a family can book face to face, from the branch's face-to-face areas.
+export const areaBranches = (branches, areaId) => branches.filter(b => b.available !== false && inGeoFence(f2fAreasOf(b), areaId)).map(b => b.id);
+// Online teachers serve the online areas of their own branches (a wider geo-fence than face to face).
+export const teacherServes = (teacher, areaId, branches) => Boolean(areaId) && teacher.branches.some(id => id !== 'online' && branches.some(b => b.id === id && b.available !== false && inGeoFence(upgradeAreas(b.areas), areaId)));
 // Per-session rates: package price ÷ 20 sessions (portfolio pp. 6–12); San Pedro has its own rates (p. 32).
 // A null rate (Kiddie Care) means the center confirms the fee.
 export const sessionRate = (programId, branch) => branch?.rates?.[programId] ?? PROGRAMS.find(p => p.id === programId)?.rate ?? null;
@@ -251,10 +259,10 @@ export function matchArea(address = {}) {
   const towns = [address.city, address.town, address.municipality, address.village, address.city_district, address.county].map(plainName).filter(Boolean);
   const inRegion = area => provinces.some(p => p.includes(slug(area.region)) || (area.region === 'Metro Manila' && /metro-manila|national-capital|ncr/.test(p)));
   for (const town of towns) {
-    const hits = AREAS.filter(a => a.region !== 'Other Luzon' && plainName(a.name) === town);
+    // "Tarlac City" and "City of Tarlac" both match the list's "Tarlac City"; plain "Tarlac" matches the town.
+    const hits = AREAS.filter(a => [plainName(a.name), plainName(a.name.replace(/ City$/, ''))].includes(town));
     const hit = hits.find(inRegion) ?? (provinces.length ? null : hits[0]);
     if (hit) return hit;
   }
-  // Whole provinces and regions only; partial ones like "Bulacan (Angat to Hagonoy)" need a manual choice.
-  return AREAS.find(a => a.region === 'Other Luzon' && !a.name.includes('(') && provinces.some(p => [plainName(a.name), plainName(a.name.replace(/ (Province|Region)$/, ''))].includes(p))) ?? null;
+  return null;
 }

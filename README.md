@@ -29,7 +29,7 @@ It is built with **no npm dependencies**: one Node.js server, the built-in SQLit
 
 - **Book a whole routine at once.** Choose a teacher, pick every date (a Mon–Fri button fills a week), and one time that works on all of them: 5+ online sessions or 20+ face-to-face.
 - **Only times that are really free.** Open slots come live from the teacher's Google Calendar, intersected across every chosen date.
-- **The right branch for where you live.** "Where do you live?" (101 cities and towns, or *Use my location*) shows only the branches and online teachers serving that area.
+- **The right branch for where you live.** "Where do you live?" (every province, city and municipality in the Philippines, or *Use my location*) shows only the branches a family can visit in person and the online teachers serving that area. Areas without a nearby branch are offered online lessons.
 - **Every program, priced up front.** Tutorials, SPED, playgroup, monthly nursery enrollment and Kiddie Care day, night or walk-in stays, with the total shown before you confirm.
 - **Pay right there.** The last step shows the GCash QR codes for the chosen branch, with a *Save QR image* link for paying from the same phone, plus an optional receipt upload.
 - **Everything in your inbox.** A branded schedule email, the branch's QR codes if still unpaid, and for online lessons one Google Meet link for every session.
@@ -53,7 +53,7 @@ An admin panel at `/admin` runs the whole site, with no code edits:
 | --- | --- |
 | **Teachers** | Schedules by day in Philippine Time, programs, branches, blackout dates, class sizes, Google connection |
 | **Programs** | Homepage cards, prices, session rules, the Kiddie Care rate table, homepage order |
-| **Locations** | Addresses, photos, programs offered, the cities each branch serves |
+| **Locations** | Addresses, photos, programs offered, homepage order, and two geo-fences built from any Philippine province or city: the towns that can book each branch face to face, and the wider area its online teachers serve |
 | **Payment QR** | GCash QR codes uploaded once, assigned to any number of branches, one shown on the How to Pay page |
 | **Permits & Feedback** | The homepage photo galleries |
 
@@ -82,7 +82,8 @@ flowchart LR
 | --- | --- |
 | Server, routes, security headers | [`server.mjs`](server.mjs) |
 | Booking rules, Google, email, storage | [`lib/`](lib) |
-| Programs, branches, areas, pricing (shared by server and browser) | [`shared.mjs`](shared.mjs) |
+| Programs, branches, geo-fence rules, pricing (shared by server and browser) | [`shared.mjs`](shared.mjs) |
+| Every Philippine province, city and municipality (from the PSA's PSGC) | [`ph-areas.mjs`](ph-areas.mjs) |
 | Homepage, booking page, admin | `index.html` + `site.js`, `booking.html` + `booking.js`, `admin.html` + `admin.js` |
 | Tests | [`tests/booking.test.mjs`](tests/booking.test.mjs) |
 | Docker and server templates | [`Dockerfile`](Dockerfile), [`deploy/`](deploy) |

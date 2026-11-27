@@ -7,9 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Teacher availability | KieAn Tutorial Center</title>
   <link rel="icon" href="assets/kiean-icon.png">
-  <link rel="stylesheet" href="style.css?v=20261127-2">
-  <link rel="stylesheet" href="admin.css?v=20261127-2">
-  <link rel="stylesheet" href="admin-responsive.css?v=20261127-2">
+  <link rel="stylesheet" href="style.css?v=20261127-4">
+  <link rel="stylesheet" href="admin.css?v=20261127-4">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261127-4">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -84,14 +84,28 @@
   <dialog id="location-editor" class="popup location-editor" aria-labelledby="location-editor-title">
     <form id="location-form">
       <div class="popup-head"><h2 id="location-editor-title">Location</h2><button class="popup-close" type="button" aria-label="Close">×</button></div>
+      <div class="loc-tabs" role="tablist" aria-label="Location settings">
+        <button class="loc-tab" type="button" role="tab" id="loc-tab-details" aria-controls="loc-panel-details" aria-selected="true">Details</button>
+        <button class="loc-tab" type="button" role="tab" id="loc-tab-f2f" aria-controls="loc-panel-f2f" aria-selected="false" tabindex="-1">Face-to-face areas <span class="loc-tab-count" id="loc-count-f2f"></span></button>
+        <button class="loc-tab" type="button" role="tab" id="loc-tab-online" aria-controls="loc-panel-online" aria-selected="false" tabindex="-1">Online areas <span class="loc-tab-count" id="loc-count-online"></span></button>
+      </div>
       <div class="popup-body">
-        <label class="admin-field">Location name<input name="name" required maxlength="80"></label>
-        <label class="admin-field">Address<textarea name="address" rows="2" maxlength="300"></textarea></label>
-        <label class="availability-switch"><input type="checkbox" name="available"> Accepting bookings</label>
-        <fieldset class="location-block"><legend>Programs offered</legend><div id="location-programs" class="choice-list"></div></fieldset>
-        <fieldset class="location-block"><legend>Service areas</legend><p class="selection-hint">Families in these cities can book this location. Online teachers based here serve the same cities.</p><div id="location-areas"></div></fieldset>
-        <fieldset class="location-block"><legend>Payment QR codes</legend><p class="selection-hint">Parents booking this location see these QR codes at the payment step. Add new codes in Payment QR.</p><div id="location-qrs" class="choice-list"></div></fieldset>
-        <fieldset class="location-block"><legend>Photos</legend><ul id="location-photos" class="photo-list"></ul><label class="file-field">Add photos <span>(JPG, PNG or WebP · 5 MB each · up to 12)</span><input id="location-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><small id="photo-status" class="file-count" aria-live="polite"></small></fieldset>
+        <div class="loc-panel" role="tabpanel" id="loc-panel-details" aria-labelledby="loc-tab-details">
+          <label class="admin-field">Location name<input name="name" required maxlength="80"></label>
+          <label class="admin-field">Address<textarea name="address" rows="2" maxlength="300"></textarea></label>
+          <label class="availability-switch"><input type="checkbox" name="available"> Accepting bookings</label>
+          <fieldset class="location-block"><legend>Programs offered</legend><div id="location-programs" class="choice-list"></div></fieldset>
+          <fieldset class="location-block"><legend>Payment QR codes</legend><p class="selection-hint">Parents booking this location see these QR codes at the payment step. Add new codes in Payment QR.</p><div id="location-qrs" class="choice-list"></div></fieldset>
+          <fieldset class="location-block"><legend>Photos</legend><ul id="location-photos" class="photo-list"></ul><label class="file-field">Add photos <span>(JPG, PNG or WebP · 5 MB each · up to 12)</span><input id="location-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><small id="photo-status" class="file-count" aria-live="polite"></small></fieldset>
+        </div>
+        <div class="loc-panel" role="tabpanel" id="loc-panel-f2f" aria-labelledby="loc-tab-f2f" hidden>
+          <p class="selection-hint">Families who live in these places can book this location <strong>face to face</strong>. Keep it to the towns near the branch.</p>
+          <div id="location-f2f-areas"></div>
+        </div>
+        <div class="loc-panel" role="tabpanel" id="loc-panel-online" aria-labelledby="loc-tab-online" hidden>
+          <p class="selection-hint">Families in these places can book <strong>online</strong> teachers based at this location. Areas here but not under Face-to-face areas are online only.</p>
+          <div id="location-areas"></div>
+        </div>
       </div>
       <div class="location-actions"><button id="delete-location" class="draft-remove" type="button">Delete location</button><small id="location-delete-hint" class="delete-hint">To delete, turn off “Accepting bookings” and save first.</small><button class="button button-primary" type="submit">Save location</button></div>
     </form>
@@ -164,6 +178,6 @@
       <div class="location-actions"><button id="delete-cancel" class="button button-secondary" type="button">Cancel</button><button id="delete-next" class="button button-danger" type="submit">Continue</button></div>
     </form>
   </dialog>
-  <script type="module" src="admin.js?v=20261127-2"></script>
+  <script type="module" src="admin.js?v=20261127-4"></script>
 </body>
 </html>

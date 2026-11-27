@@ -1,4 +1,4 @@
-import {PROGRAMS,AREAS,PERIOD_TYPES,CARE_TYPES,PORTFOLIO_TEACHERS,setPrograms,scheduleSummary,slug} from './shared.mjs';
+import {PROGRAMS,AREAS,PROVINCES,PERIOD_TYPES,CARE_TYPES,PORTFOLIO_TEACHERS,setPrograms,scheduleSummary,slug} from './shared.mjs';
 
 const $=selector=>document.querySelector(selector);
 const list=$('#teacher-list'),form=$('#roster-form'),message=$('#admin-message');
@@ -217,21 +217,54 @@ load();
 window.addEventListener('focus',refreshConnections);
 
 // ---- Locations: branches on the website, their programs, service areas and photos ----
-const REGIONS=[...new Set(AREAS.map(a=>a.region))];
 const editor=$('#location-editor'),locForm=$('#location-form');
 // Enter in a text field must not submit: only the Save buttons save.
 for(const f of [form,locForm,$('#program-form')])f.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.matches('input:not([type=checkbox]):not([type=radio]):not([type=file])'))event.preventDefault();});
 let editingLocation=null,draftPhotos=[];
 function locationCard(b){
-  const card=node('button','teacher-summary location-summary');card.type='button';
+  const item=node('div','program-item'),card=node('button','teacher-summary location-summary');card.type='button';
   const head=node('div','summary-head'),title=node('div','summary-title'),tags=node('div','summary-tags');
   const tag=(text,kind)=>{const t=node('span','summary-tag',text);t.dataset.kind=kind;tags.append(t);};
   tag(b.available!==false?'Accepting bookings':'Disabled',b.available!==false?'on':'off');tag(`${b.photos.length} photo${b.photos.length===1?'':'s'}`,'off');
   title.append(node('strong','',b.name),tags);head.append(title);card.append(head,node('p','location-address',b.address||'No address yet'));
   const meta=node('dl','summary-meta');
-  for(const [label,value] of [['Programs',b.programs.map(id=>PROGRAMS.find(p=>p.id===id)?.name).join(', ')],['Serves',`${b.areas.length} cities and areas`]]){const row=node('div');row.append(node('dt','',label),node('dd','',value));meta.append(row);}
-  card.append(meta,node('span','summary-open','Edit location →'));card.addEventListener('click',()=>openLocation(b));return card;
+  const inPerson=(b.f2fAreas||[]).length;
+  for(const [label,value] of [['Programs',b.programs.map(id=>PROGRAMS.find(p=>p.id===id)?.name).join(', ')],['In person',inPerson?`${inPerson} ${inPerson===1?'city or area':'cities and areas'}`:'Online only'],['Online',`${b.areas.length} cities and areas`]]){const row=node('div');row.append(node('dt','',label),node('dd','',value));meta.append(row);}
+  card.append(meta,node('span','summary-open','Edit location →'));card.addEventListener('click',()=>openLocation(b));
+  // Homepage and booking-page order: move past the neighbouring location in the same section.
+  const peers=locations.filter(x=>(x.available!==false)===(b.available!==false)),at=peers.indexOf(b),order=node('div','location-order');
+  for(const [text,step,label] of [['↑',-1,'earlier'],['↓',1,'later']]){
+    const other=peers[at+step],btn=node('button','button button-secondary',text);btn.type='button';btn.setAttribute('aria-label',`Move ${b.name} ${label} on the homepage`);btn.disabled=!other;
+    btn.dataset.moveLocation=`${b.id}:${step}`;btn.addEventListener('click',()=>moveLocation(b.id,other?.id,step));order.append(btn);
+  }
+  item.append(card,order);return item;
 }
+// Optimistic reordering: the list moves at once, and one save follows a second after the last click.
+let locOrderTimer=null,locOrderSaving=false,locOrderPending=false;
+function moveLocation(id,otherId,step){
+  const i=locations.findIndex(b=>b.id===id),j=locations.findIndex(b=>b.id===otherId);if(i<0||j<0)return;
+  const next=[...locations];[next[i],next[j]]=[next[j],next[i]];setLocations(next);renderLocations();
+  const again=$(`[data-move-location="${id}:${step}"]`);(again&&!again.disabled?again:$(`[data-move-location="${id}:${-step}"]`))?.focus();
+  setMessage('Location order changed · saving…');clearTimeout(locOrderTimer);locOrderTimer=setTimeout(syncLocationOrder,1000);
+}
+async function syncLocationOrder(){
+  locOrderTimer=null;
+  if(locOrderSaving){locOrderPending=true;return;}
+  locOrderSaving=true;const sent=locations.map(b=>b.id).join();
+  try{
+    const data=await request('/api/admin/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branches:locations})});
+    if(locations.map(b=>b.id).join()===sent&&!locOrderTimer){setLocations(data.branches);renderLocations();}
+    if(!locOrderTimer&&!locOrderPending)setMessage('Location order saved. The homepage and booking page use it now.','success');
+  }catch(error){
+    locOrderPending=false;clearTimeout(locOrderTimer);locOrderTimer=null;
+    try{const data=await request('/api/admin/branches');setLocations(data.branches);renderLocations();}catch{}
+    setMessage(`The new order was not saved: ${error.message} The saved order is shown again.`,'error');
+  }finally{
+    locOrderSaving=false;
+    if(locOrderPending){locOrderPending=false;syncLocationOrder();}
+  }
+}
+window.addEventListener('beforeunload',event=>{if(locOrderTimer||locOrderSaving)event.preventDefault();});
 function renderLocations(){$('#location-list').replaceChildren(...sections(locations,locationCard,'No location is accepting bookings.'));}
 function checkbox(name,value,label,checked){const wrap=node('label','choice'),input=node('input');input.type='checkbox';input.name=name;input.value=value;input.checked=checked;wrap.append(input,node('span','',label));return wrap;}
 function renderPhotos(){
@@ -241,18 +274,65 @@ function renderPhotos(){
     remove.addEventListener('click',()=>{draftPhotos=draftPhotos.filter(p=>p!==src);renderPhotos();});item.append(img,remove);return item;
   }));
 }
+// Geo-fence list builder: pick a province, then one city or "All of <province>", and add it to the list.
+const AREA_BY_ID=new Map(AREAS.map(a=>[a.id,a])),PROVINCE_BY_NAME=new Map(PROVINCES.map(p=>[p.name,p]));
+let draftGeo={f2fAreas:[],areas:[]};
+const geoProvince=id=>id.startsWith('province:')?PROVINCES.find(p=>p.id===id)?.name:AREA_BY_ID.get(id)?.region;
+const geoLabel=id=>id.startsWith('province:')?`All of ${geoProvince(id)}`:AREA_BY_ID.has(id)?AREA_BY_ID.get(id).name:id;
+const geoSort=list=>[...list].sort((a,b)=>(geoProvince(a)||'').localeCompare(geoProvince(b)||'')||(a.startsWith('province:')?-1:b.startsWith('province:')?1:geoLabel(a).localeCompare(geoLabel(b))));
+function renderGeo(key){
+  const box=$(key==='f2fAreas'?'#location-f2f-areas':'#location-areas'),list=draftGeo[key];
+  const builder=node('div','geo-builder'),prov=node('select'),city=node('select'),add=node('button','button button-secondary','Add'),note=node('small','file-count');
+  prov.setAttribute('aria-label','Province');city.setAttribute('aria-label','City or municipality');add.type='button';note.setAttribute('role','status');
+  const opt=(text,value)=>{const o=node('option','',text);o.value=value;return o;};
+  prov.append(opt('Choose a province',''),...PROVINCES.map(p=>opt(p.name,p.name)));
+  const fillCities=()=>{
+    const p=PROVINCE_BY_NAME.get(prov.value);city.disabled=!p;add.disabled=!p;
+    city.replaceChildren(...(p?[opt(`All of ${p.name} (every city and municipality)`,p.id),...AREAS.filter(a=>a.region===p.name).map(a=>opt(a.name,a.id))]:[opt('Choose a province first','')]));
+  };
+  prov.addEventListener('change',()=>{fillCities();note.textContent='';});fillCities();
+  add.addEventListener('click',()=>{
+    const id=city.value,p=geoProvince(id);if(!id)return;
+    if(list.includes(id)){note.textContent=`${geoLabel(id)} is already on the list.`;return;}
+    const whole=PROVINCE_BY_NAME.get(p)?.id;
+    if(!id.startsWith('province:')&&list.includes(whole)){note.textContent=`${geoLabel(id)} is already covered by All of ${p}.`;return;}
+    // A whole province replaces any single cities from it.
+    draftGeo[key]=geoSort([...(id.startsWith('province:')?list.filter(x=>geoProvince(x)!==p):list),id]);
+    renderGeo(key);countLocAreas();
+    const again=$(key==='f2fAreas'?'#location-f2f-areas':'#location-areas').querySelector('select');again.value=p;again.dispatchEvent(new Event('change'));
+  });
+  builder.append(prov,city,add);
+  const chips=node('ul','geo-list');
+  chips.append(...(list.length?list.map(id=>{
+    const li=node('li','geo-chip'+(id.startsWith('province:')?' geo-chip-whole':'')),x=node('button','file-remove','×');
+    x.type='button';x.setAttribute('aria-label',`Remove ${geoLabel(id)}${id.startsWith('province:')?'':`, ${geoProvince(id)}`}`);
+    x.addEventListener('click',()=>{draftGeo[key]=list.filter(v=>v!==id);renderGeo(key);countLocAreas();});
+    li.append(node('span','',geoLabel(id)),...(id.startsWith('province:')?[]:[node('small','',geoProvince(id))]),x);return li;
+  }):[node('li','teacher-group-empty',key==='f2fAreas'?'No areas yet: this location cannot be booked face to face.':'No areas yet: online teachers here serve no one.')]));
+  box.replaceChildren(builder,note,chips);
+}
+function countLocAreas(){$('#loc-count-f2f').textContent=draftGeo.f2fAreas.length;$('#loc-count-online').textContent=draftGeo.areas.length;}
+const LOC_TABS=['details','f2f','online'];
+function showLocTab(tab,focus=false){
+  for(const t of LOC_TABS){const btn=$(`#loc-tab-${t}`),on=t===tab;btn.setAttribute('aria-selected',String(on));btn.tabIndex=on?0:-1;$(`#loc-panel-${t}`).hidden=!on;}
+  if(focus)$(`#loc-tab-${tab}`).focus();
+  locForm.querySelector('.popup-body').scrollTop=0;
+}
+for(const t of LOC_TABS)$(`#loc-tab-${t}`).addEventListener('click',()=>showLocTab(t));
+$('.loc-tabs').addEventListener('keydown',e=>{
+  const i=LOC_TABS.findIndex(t=>$(`#loc-tab-${t}`)===document.activeElement);if(i<0)return;
+  const next={ArrowRight:i+1,ArrowLeft:i-1,Home:0,End:LOC_TABS.length-1}[e.key];if(next===undefined)return;
+  e.preventDefault();showLocTab(LOC_TABS[(next+LOC_TABS.length)%LOC_TABS.length],true);
+});
+// A required field on a hidden tab cannot show its message: open the Details tab first.
+locForm.addEventListener('invalid',()=>showLocTab('details'),true);
 function openLocation(branch){
   editingLocation=branch?.id||null;draftPhotos=[...(branch?.photos||[])];
   $('#location-editor-title').textContent=branch?branch.name:'New location';
   locForm.elements.name.value=branch?.name||'';locForm.elements.address.value=branch?.address||'';locForm.elements.available.checked=branch?branch.available!==false:true;
   $('#location-programs').replaceChildren(...PROGRAMS.filter(p=>p.mode==='branch').map(p=>checkbox('programs',p.id,p.available===false?`${p.name} (disabled)`:p.name,Boolean(branch?.programs.includes(p.id)))));
-  $('#location-areas').replaceChildren(...REGIONS.map(region=>{
-    const group=node('fieldset','area-group'),places=AREAS.filter(a=>a.region===region);
-    const all=checkbox('','', `${region==='Other Luzon'?'Other provinces':region} — select all`,places.every(a=>branch?.areas.includes(a.id)));all.classList.add('select-all');
-    const list=node('div','choice-list');list.append(...places.map(a=>checkbox('areas',a.id,a.name,Boolean(branch?.areas.includes(a.id)))));
-    all.querySelector('input').addEventListener('change',e=>list.querySelectorAll('input').forEach(i=>{i.checked=e.target.checked;}));
-    group.append(node('legend','',region==='Other Luzon'?'Other provinces':region),all,list);return group;
-  }));
+  draftGeo={f2fAreas:geoSort(branch?.f2fAreas||[]),areas:geoSort(branch?.areas||[])};
+  renderGeo('f2fAreas');renderGeo('areas');countLocAreas();showLocTab('details');
   const qrBox=$('#location-qrs');
   qrBox.replaceChildren(...(paymentQrs.length?paymentQrs.map(q=>checkbox('paymentQrs',q.id,`${qrTitle(q)} · ${q.number}${q.available?'':' (hidden)'}`,Boolean(branch?.paymentQrs?.includes(q.id)))):[node('p','teacher-group-empty','No QR codes yet. Add them in Payment QR.')]));
   renderPhotos();$('#photo-status').textContent='';
@@ -283,7 +363,7 @@ locForm.addEventListener('submit',event=>{
   const name=locForm.elements.name.value.trim(),current=locations.find(b=>b.id===editingLocation);
   let id=current?.id;if(!id){id=slug(name)||'location';for(let n=2;locations.some(b=>b.id===id);n++)id=`${slug(name)}-${n}`;}
   const checked=group=>[...locForm.querySelectorAll(`input[name="${group}"]:checked`)].map(i=>i.value);
-  const branch={...current,id,name,address:locForm.elements.address.value.trim(),available:locForm.elements.available.checked,programs:checked('programs'),areas:checked('areas'),photos:draftPhotos,paymentQrs:checked('paymentQrs')};
+  const branch={...current,id,name,address:locForm.elements.address.value.trim(),available:locForm.elements.available.checked,programs:checked('programs'),f2fAreas:draftGeo.f2fAreas,areas:draftGeo.areas,photos:draftPhotos,paymentQrs:checked('paymentQrs')};
   const next=current?locations.map(b=>b.id===id?branch:b):[...locations,branch];
   saveLocations(next,`${name} saved. The website, booking page and teacher options now use it.`);
 });

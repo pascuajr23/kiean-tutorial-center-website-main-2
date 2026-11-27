@@ -4,6 +4,7 @@
 !package.json
 !server.mjs
 !shared.mjs
+!ph-areas.mjs
 !lib/
 !scripts/
 !assets/

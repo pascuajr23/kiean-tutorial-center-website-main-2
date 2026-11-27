@@ -1,4 +1,4 @@
-import {paymentQrsFor,PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
+import {PROVINCES,paymentQrsFor,PROGRAMS,setPrograms,bookable,DEFAULT_BRANCHES,AREAS,branchById,areaBranches,offers,teacherServes,matchArea,PREVIEW_TEACHERS,sessionRate,careTiming,kiddieQuote,KIDDIE_CARE,KIDDIE_NOTES,peso,totalLabel,ATTACHMENT_TYPES,MAX_ATTACHMENT_BYTES,MAX_REQUEST_FILES,MAX_SESSIONS,HORIZON_DAYS,manilaDay,addDays,weekday,instant,timeLabel,slotLabel,dateLabel,slotsForDay,icsForBooking} from './shared.mjs';
 const $=id=>document.getElementById(id);
 const q=new URLSearchParams(location.search);
 const today=manilaDay();
@@ -33,16 +33,22 @@ async function init(){
   $('connection-status').classList.toggle('live',!state.preview);
   $('submit-booking').textContent=state.preview?'Preview my sessions →':'Confirm sessions →';
   $('calendar-note').textContent=state.preview?'This is a preview. Google Calendar is not connected.':'Confirmed sessions will appear in the teacher’s Google Calendar.';
-  // Province first (PDF geo-fence regions), then that province's cities and municipalities.
-  for(const region of ['Cavite','Laguna','Batangas','Metro Manila','Other Luzon']){const opt=node('option',region==='Other Luzon'?'Other provinces':region);opt.value=region;$('province').append(opt);}
-  const none=node('option','My area is not listed');none.value='none';$('province').append(none);
+  // Province first (every province in the Philippines; KieAn's home provinces on top), then its cities and municipalities.
+  const provinceGroup=(label,names)=>{const g=document.createElement('optgroup');g.label=label;g.append(...names.map(name=>{const opt=node('option',name);opt.value=name;return opt;}));return g;};
+  const HOME=['Cavite','Laguna','Batangas','Metro Manila'];
+  $('province').append(provinceGroup('Near KieAn branches',HOME),provinceGroup('All provinces',PROVINCES.map(p=>p.name).filter(n=>!HOME.includes(n))));
   $('care').replaceChildren(...Object.entries(KIDDIE_CARE).map(([id,c])=>{const opt=node('option',c.label);opt.value=id;return opt;}));
   $('step-1').classList.remove('is-loading');$('step-1').removeAttribute('aria-busy');
   renderPrograms();
 }
 function renderPrograms(){
   // Branch lessons: only branches serving the parent's area, and only the programs that branch offers.
-  const area=getArea(),branches=state.mode==='branch'?(areaBranches(state.branches,state.area)):[];
+  const area=getArea(),inPerson=areaBranches(state.branches,state.area);
+  // Areas outside every branch's face-to-face list are online only: say so and switch to online.
+  const f2fOption=$('mode').querySelector('option[value="branch"]'),f2fOff=Boolean(area)&&!inPerson.length;
+  f2fOption.disabled=f2fOff;f2fOption.textContent=f2fOff?'Face to face (not available in your area, online only)':'Face to face at a branch';
+  if(f2fOff&&state.mode==='branch')state.mode='online';
+  const branches=state.mode==='branch'?inPerson:[];
   // Location comes first: format, program, branch and teacher appear only once the area is known.
   document.querySelectorAll('[data-needs-area]').forEach(el=>{el.hidden=!area;});
   if(branches.length&&!branches.includes(state.branch))state.branch=branches.find(b=>offers(state.branches,b,state.program))||branches[0];
@@ -284,7 +290,7 @@ $('program').addEventListener('change',e=>{state.program=e.target.value;state.te
 for(const id of ['care','needs','plan','hours','tutorial'])$(id).addEventListener('change',e=>{state[id]=id==='hours'?Number(e.target.value):id==='tutorial'?e.target.checked:e.target.value;resetSchedule();renderPrograms();});
 function fillAreas(region){
   const places=AREAS.filter(a=>a.region===region).sort((a,b)=>a.name.localeCompare(b.name));
-  const first=node('option',!region?'Choose your province first':region==='none'?'—':'Choose your city or municipality');first.value='';
+  const first=node('option',region?'Choose your city or municipality':'Choose your province first');first.value='';
   $('area').replaceChildren(first,...places.map(a=>{const opt=node('option',a.name);opt.value=a.id;return opt;}));$('area').disabled=!places.length;
 }
 $('province').addEventListener('change',e=>{fillAreas(e.target.value);state.area=e.target.value==='none'?'none':'';state.teacher='';resetSchedule();renderPrograms();});
