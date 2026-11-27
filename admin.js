@@ -129,7 +129,7 @@ function makeSummaryCard(teacher){
   return card;
 }
 // Enabled items first; disabled ones (not accepting bookings) in their own section below. Used for teachers, programs and locations.
-function sections(items,makeCard,empty){
+function sections(items,makeCard,empty,titles=['Accepting bookings','Disabled · not accepting bookings']){
   const open=items.filter(x=>x.available!==false),paused=items.filter(x=>x.available===false);
   const group=(title,list,emptyText)=>{
     const section=node('section','teacher-group'),grid=node('div','teacher-group-grid');
@@ -137,7 +137,7 @@ function sections(items,makeCard,empty){
     if(list.length)grid.append(...list.map(makeCard));else grid.append(node('p','teacher-group-empty',emptyText));
     section.append(grid);return section;
   };
-  return [group('Accepting bookings',open,empty),...(paused.length?[group('Disabled · not accepting bookings',paused)]:[])];
+  return [group(titles[0],open,empty),...(paused.length?[group(titles[1],paused)]:[])];
 }
 const overviewGroups=()=>sections(teachers,makeSummaryCard,'No teacher is accepting bookings yet.');
 function render(){
@@ -180,7 +180,7 @@ function showCenter(center){
 }
 async function load(){
   setMessage('Loading teacher roster…');
-  try{const data=await request('/api/admin/teachers');showCenter(data.center);if(data.programs)setPrograms(data.programs);galleries=data.galleries||null;if(GALLERY[view])openGalleryEditor(view);renderPrograms();setLocations(data.branches);renderLocations();teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));render();message.hidden=true;}
+  try{const data=await request('/api/admin/teachers');showCenter(data.center);if(data.programs)setPrograms(data.programs);galleries=data.galleries||null;paymentQrs=data.paymentQrs||[];renderQrs();if(GALLERY[view])openGalleryEditor(view);renderPrograms();setLocations(data.branches);renderLocations();teachers=data.teachers;savedIds=new Set(teachers.map(teacher=>teacher.id));render();message.hidden=true;}
   catch(error){setMessage(error.message==='fetch failed'?'Could not reach the booking server.':error.message,'error');form.hidden=true;}
 }
 async function refreshConnections(){
@@ -253,6 +253,8 @@ function openLocation(branch){
     all.querySelector('input').addEventListener('change',e=>list.querySelectorAll('input').forEach(i=>{i.checked=e.target.checked;}));
     group.append(node('legend','',region==='Other Luzon'?'Other provinces':region),all,list);return group;
   }));
+  const qrBox=$('#location-qrs');
+  qrBox.replaceChildren(...(paymentQrs.length?paymentQrs.map(q=>checkbox('paymentQrs',q.id,`${qrTitle(q)} · ${q.number}${q.available?'':' (hidden)'}`,Boolean(branch?.paymentQrs?.includes(q.id)))):[node('p','teacher-group-empty','No QR codes yet. Add them in Payment QR.')]));
   renderPhotos();$('#photo-status').textContent='';
   const off=branch?.available===false;$('#delete-location').hidden=!off;$('#location-delete-hint').hidden=!branch||off;editor.showModal();locForm.elements.name.focus();
 }
@@ -273,7 +275,7 @@ $('#location-photo-input').addEventListener('change',async e=>{
   }
 });
 async function saveLocations(next,message,remove){
-  try{const data=await request('/api/admin/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branches:next,remove})});setLocations(data.branches);if(data.teachers&&editing===null)teachers=data.teachers;renderLocations();if(editing===null)render();editor.close();setMessage(message,'success');}
+  try{const data=await request('/api/admin/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branches:next,remove})});setLocations(data.branches);if(data.teachers&&editing===null)teachers=data.teachers;renderLocations();renderQrs();if(editing===null)render();editor.close();setMessage(message,'success');}
   catch(error){$('#photo-status').textContent=error.message;}
 }
 locForm.addEventListener('submit',event=>{
@@ -281,7 +283,7 @@ locForm.addEventListener('submit',event=>{
   const name=locForm.elements.name.value.trim(),current=locations.find(b=>b.id===editingLocation);
   let id=current?.id;if(!id){id=slug(name)||'location';for(let n=2;locations.some(b=>b.id===id);n++)id=`${slug(name)}-${n}`;}
   const checked=group=>[...locForm.querySelectorAll(`input[name="${group}"]:checked`)].map(i=>i.value);
-  const branch={...current,id,name,address:locForm.elements.address.value.trim(),available:locForm.elements.available.checked,programs:checked('programs'),areas:checked('areas'),photos:draftPhotos};
+  const branch={...current,id,name,address:locForm.elements.address.value.trim(),available:locForm.elements.available.checked,programs:checked('programs'),areas:checked('areas'),photos:draftPhotos,paymentQrs:checked('paymentQrs')};
   const next=current?locations.map(b=>b.id===id?branch:b):[...locations,branch];
   saveLocations(next,`${name} saved. The website, booking page and teacher options now use it.`);
 });
@@ -289,6 +291,63 @@ $('#delete-location').addEventListener('click',async()=>{
   const current=locations.find(b=>b.id===editingLocation);if(current?.available!==false)return;
   const typed=await confirmDelete('location',current.name,'Its address, photos and service areas are removed from the website. Move its teachers to another location first.');
   if(typed)saveLocations(locations.filter(b=>b.id!==current.id),`${current.name} deleted.`,{id:current.id,name:typed});
+});
+// ---- Payment QR codes: uploaded here, assigned to locations in the location editor ----
+const qrEditor=$('#qr-editor'),qrForm=$('#qr-form');
+let paymentQrs=[],editingQr=null,draftQrImage=null;
+const qrTitle=q=>q.label||q.name;
+const qrUsers=q=>locations.filter(b=>b.paymentQrs?.includes(q.id)).map(b=>b.name);
+function qrCard(q){
+  const card=node('button','teacher-summary location-summary qr-summary');card.type='button';
+  const head=node('div','summary-head'),title=node('div','summary-title'),tags=node('div','summary-tags'),img=node('img','qr-thumb');
+  img.src='/'+q.image;img.alt='';img.loading='lazy';
+  const tag=(text,kind)=>{const t=node('span','summary-tag',text);t.dataset.kind=kind;tags.append(t);};
+  tag(q.available?'On booking page':'Hidden',q.available?'on':'off');if(q.online)tag('Online bookings','on');
+  title.append(node('strong','',qrTitle(q)),tags);head.append(img,title);card.append(head);
+  const users=qrUsers(q),meta=node('dl','summary-meta');
+  for(const [label,value] of [['Name',q.name],['Number',q.number],['Used by',users.length?users.join(', '):'No location yet']]){const row=node('div');row.append(node('dt','',label),node('dd','',value));meta.append(row);}
+  card.append(meta,node('span','summary-open','Edit QR code →'));card.addEventListener('click',()=>openQr(q));return card;
+}
+function renderQrs(){$('#qr-list').replaceChildren(...sections(paymentQrs,qrCard,'No QR code is shown on the booking page yet.',['Shown on booking page','Hidden · not shown to parents']));}
+function showQrImage(){const img=$('#qr-preview');img.hidden=!draftQrImage;if(draftQrImage)img.src='/'+draftQrImage;}
+function openQr(q){
+  editingQr=q?.id||null;draftQrImage=q?.image||null;showQrImage();
+  $('#qr-editor-title').textContent=q?qrTitle(q):'New payment QR code';
+  qrForm.elements.label.value=q?.label||'';qrForm.elements.name.value=q?.name||'';qrForm.elements.number.value=q?.number||'';
+  qrForm.elements.online.checked=Boolean(q?.online);qrForm.elements.available.checked=q?q.available:true;
+  const users=q?qrUsers(q):[];$('#qr-used').textContent=q?(users.length?`Used by: ${users.join(', ')}. Change this in Locations.`:'Not assigned to any location yet. Assign it in Locations.'):'After saving, open a location and tick this QR code under Payment QR codes.';
+  $('#qr-status').textContent='';const off=q&&!q.available&&!users.length;$('#delete-qr').hidden=!off;$('#qr-delete-hint').hidden=!q||off;
+  qrEditor.showModal();qrForm.elements.label.focus();
+}
+$('#add-qr').addEventListener('click',()=>openQr(null));
+qrEditor.querySelector('.popup-close').addEventListener('click',()=>qrEditor.close());
+$('#qr-image-input').addEventListener('change',async e=>{
+  const [file]=e.target.files;e.target.value='';const status=$('#qr-status');if(!file)return;
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){status.textContent=`${file.name} is not a JPG, PNG or WebP image.`;return;}
+  if(file.size>5*1024*1024){status.textContent=`${file.name} is larger than 5 MB.`;return;}
+  status.textContent=`Uploading ${file.name}…`;
+  try{
+    const data=await new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=fail;r.readAsDataURL(file);});
+    const {path}=await request('/api/admin/branch-photos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:file.type,data})});
+    draftQrImage=path;showQrImage();status.textContent='QR image added. Save to keep it.';
+  }catch(error){status.textContent=error.message;}
+});
+async function saveQrs(next,text,remove){
+  try{const data=await request('/api/admin/payment-qrs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paymentQrs:next,remove})});paymentQrs=data.paymentQrs;renderQrs();qrEditor.close();setMessage(text,'success');}
+  catch(error){$('#qr-status').textContent=error.message;}
+}
+qrForm.addEventListener('submit',event=>{
+  event.preventDefault();
+  if(!draftQrImage){$('#qr-status').textContent='Upload the QR code image first.';return;}
+  const f=qrForm.elements,current=paymentQrs.find(q=>q.id===editingQr),label=f.label.value.trim(),name=f.name.value.trim();
+  let id=current?.id;if(!id){const base=slug(label||name)||'qr';id=base;for(let n=2;paymentQrs.some(q=>q.id===id);n++)id=`${base}-${n}`;}
+  const qr={id,label,name,number:f.number.value.trim(),image:draftQrImage,online:f.online.checked,available:f.available.checked};
+  saveQrs(current?paymentQrs.map(q=>q.id===id?qr:q):[...paymentQrs,qr],`${qrTitle(qr)} saved.${current?'':' Now assign it to its locations in Locations.'}`);
+});
+$('#delete-qr').addEventListener('click',async()=>{
+  const current=paymentQrs.find(q=>q.id===editingQr);if(!current||current.available||qrUsers(current).length)return;
+  const typed=await confirmDelete('payment QR',current.name,'Parents will no longer see it. Uploaded image files stay on the server.');
+  if(typed)saveQrs(paymentQrs.filter(q=>q.id!==current.id),`${qrTitle(current)} deleted.`,{id:current.id,name:typed});
 });
 // ---- Homepage photo galleries: Permits and Feedback (testimonials) ----
 const GALLERY={permits:{key:'permits',title:'Permits',intro:'Permit and registration photos in the homepage Permits section, in this order. Each needs a caption.',captions:true},feedback:{key:'testimonials',title:'Feedback',intro:'Parent feedback screenshots in the homepage Testimonials section, in this order.'}};
@@ -347,7 +406,7 @@ window.addEventListener('beforeunload',event=>{if(galleryDirty)event.preventDefa
 // Home shows big choices; #teachers, #programs and #locations are separate screens.
 let view='';
 function route(){
-  const next=['teachers','programs','locations','permits','feedback'].includes(location.hash.slice(1))?location.hash.slice(1):'';
+  const next=['teachers','programs','locations','payments','permits','feedback'].includes(location.hash.slice(1))?location.hash.slice(1):'';
   if(galleryDirty&&galleryKind&&next!==galleryKind){if(!confirm('Discard unsaved photo changes?')){location.hash=galleryKind;return;}galleryDirty=false;}
   if(view==='teachers'&&next!=='teachers'&&editing!==null){
     if(dirty&&!confirm('Discard unsaved changes to this teacher?')){location.hash='teachers';return;}
@@ -355,7 +414,7 @@ function route(){
   }
   view=next;
   const screen=GALLERY[next]?'gallery':next||'home';
-  for(const id of ['home','teachers','programs','locations','gallery'])$(`#view-${id}`).hidden=id!==screen;
+  for(const id of ['home','teachers','programs','locations','payments','gallery'])$(`#view-${id}`).hidden=id!==screen;
   galleryKind=null;if(GALLERY[next])openGalleryEditor(next);
   if(message.dataset.kind!=='error')message.hidden=true;
   window.scrollTo(0,0);

@@ -65,3 +65,11 @@
 .gallery-admin-fields{display:grid;gap:8px;min-width:0}.gallery-admin-item .program-order{flex-direction:column}
 #view-gallery .locations{margin-top:0;padding-top:0;border-top:0}
 @media(max-width:760px){.admin-choices-small{grid-template-columns:1fr}.gallery-admin-item{grid-template-columns:72px 1fr}.gallery-admin-item img{width:72px;height:72px}.gallery-admin-item .program-order{grid-column:1/-1;flex-direction:row}}
+/* Payment QR codes */
+.qr-upload{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:16px}
+#qr-preview,.qr-thumb{width:112px;height:112px;object-fit:contain;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--white)}
+.qr-summary .summary-head{display:flex;align-items:center;gap:14px}
+.qr-summary .qr-thumb{width:64px;height:64px;flex:none}
+.field-note{font-weight:500}
+@media(max-width:520px){.qr-upload{grid-template-columns:1fr}}
+

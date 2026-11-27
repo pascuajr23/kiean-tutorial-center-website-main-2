@@ -636,3 +636,36 @@ test('availability reads Google once a minute per teacher, whatever dates are as
   await assert.rejects(svc.book({...payload(),attachments:[{kind:'receipt',name:'r.png',type:'image/png',data:png}]},NOW),/no longer available/);
   assert.deepEqual(readdirSync(dir),[]);
 });
+test('payment QR codes: uploaded once, assigned to many locations, shown per location, deleted only when unused',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-qr-')),configPath=join(dir,'config.json');
+  const cfg={...config,mode:'live',programs:structuredClone(DEFAULT_PROGRAMS),branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...config.teachers[0]}]};
+  Object.defineProperty(cfg,'configFile',{value:configPath});
+  const store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,4).toString('base64')});
+  const app=createApp({config:cfg,configPath,store,adminCredentials:{username:'center-admin',password:'private-password'}});await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>app.close(r));store.close();rmSync(dir,{recursive:true,force:true});setPrograms(DEFAULT_PROGRAMS);});
+  const base='http://127.0.0.1:'+app.address().port,auth={Authorization:'Basic '+Buffer.from('center-admin:private-password').toString('base64'),Origin:cfg.publicOrigin,'Content-Type':'application/json'};
+  const post=(path,body)=>fetch(base+path,{method:'POST',headers:auth,body:JSON.stringify(body)});
+  const gt={id:'gcash-gentri',label:'GCash · General Trias',name:'Kierlle Piad',number:'0917 123 4567',image:'branch-photos/'+'a'.repeat(24)+'.png',online:true,available:true};
+  const laguna={id:'gcash-laguna',name:'KieAn Laguna',number:'0918-765-4321',image:'branch-photos/'+'b'.repeat(24)+'.png',available:false};
+  // bad input is refused; good QR codes save to config.json
+  assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[{...gt,number:'call me'}]})).status,400);
+  assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[{...gt,image:'../config.json'}]})).status,400);
+  assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[gt,laguna]})).status,200);
+  assert.deepEqual(JSON.parse(readFileSync(configPath,'utf8')).paymentQrs.map(q=>q.id),['gcash-gentri','gcash-laguna']);
+  // one QR on two locations, two QRs on one location; unknown ids are refused
+  const assign=map=>cfg.branches.map(b=>map[b.id]?{...b,paymentQrs:map[b.id]}:b);
+  assert.equal((await post('/api/admin/branches',{branches:assign({natania:['nope']})})).status,400);
+  assert.equal((await post('/api/admin/branches',{branches:assign({natania:['gcash-gentri'],'south-square':['gcash-gentri','gcash-laguna']})})).status,200);
+  // the booking page gets only QR codes shown to parents, plus each location's list
+  const pub=await (await fetch(base+'/api/config')).json();
+  assert.deepEqual(pub.paymentQrs.map(q=>q.id),['gcash-gentri']);assert.equal(pub.paymentQrs[0].number,'0917 123 4567');assert.equal(pub.paymentQrs[0].online,true);
+  assert.deepEqual(pub.branches.find(b=>b.id==='south-square').paymentQrs,['gcash-gentri','gcash-laguna']);
+  assert.equal(pub.branches.find(b=>b.id==='pila').paymentQrs,undefined);
+  // deleting: must be hidden, then unassigned, then named exactly
+  assert.match((await (await post('/api/admin/payment-qrs',{paymentQrs:[laguna],remove:{id:gt.id,name:gt.name}})).json()).error,/still shown on the booking page/);
+  assert.match((await (await post('/api/admin/payment-qrs',{paymentQrs:[gt],remove:{id:laguna.id,name:laguna.name}})).json()).error,/still assigned to South Square/);
+  assert.equal((await post('/api/admin/branches',{branches:assign({natania:['gcash-gentri'],'south-square':['gcash-gentri']})})).status,200);
+  assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[gt],remove:{id:laguna.id,name:'KieAn'}})).status,409);
+  assert.equal((await post('/api/admin/payment-qrs',{paymentQrs:[gt],remove:{id:laguna.id,name:laguna.name}})).status,200);
+  assert.equal((await fetch(base+'/api/admin/payment-qrs',{method:'POST',headers:{...auth,Origin:'https://attacker.example'},body:'{}'})).status,403);
+});

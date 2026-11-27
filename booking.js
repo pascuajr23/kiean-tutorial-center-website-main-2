@@ -27,7 +27,7 @@ async function api(path,options={}) {
   return data;
 }
 async function init(){
-  try{const config=await api('/api/config');state.preview=config.preview;state.teachers=config.teachers;state.paymentInstructions=config.paymentInstructions;state.branches=config.branches||DEFAULT_BRANCHES;if(config.programs)setPrograms(config.programs);}
+  try{const config=await api('/api/config');state.preview=config.preview;state.teachers=config.teachers;state.paymentInstructions=config.paymentInstructions;state.paymentQrs=config.paymentQrs||[];state.branches=config.branches||DEFAULT_BRANCHES;if(config.programs)setPrograms(config.programs);}
   catch{state.preview=true;state.teachers=PREVIEW_TEACHERS;}
   $('connection-status').textContent=state.preview?'Preview mode — sample teacher and availability. No booking is saved and Google Calendar is not updated.':'Live availability. Confirmed sessions go straight to the teacher’s Google Calendar.';
   $('connection-status').classList.toggle('live',!state.preview);
@@ -177,11 +177,32 @@ function renderReview(){
   const rate=sessionRate(state.program,branchById(state.branches,bookingBranch())),p=getProgram(),care=quote();
   $('total-price').textContent=totalLabel(care?care.total:rate==null?null:rate*state.dates.length);
   $('price-breakdown').textContent=care?care.summary:rate==null?`${state.dates.length} day${state.dates.length===1?'':'s'} · ${state.hours} h each · the center confirms the fee`:monthly()?`${minDates()} class days`:`${state.dates.length} sessions × ${peso(rate)} per session`;
-  $('payment-instructions').textContent=state.paymentInstructions||'Scan the QR code in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.';
+  const qrs=payQrs();
+  $('payment-instructions').textContent=state.paymentInstructions||(qrs.length>1?'Scan any one of these QR codes in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.':'Scan the QR code in GCash, pay the total above, then upload your receipt below. You can also pay later at the branch.');
+  renderPayQrs(qrs);
   $('fee-note').textContent=(p.price?p.price+'. ':'')+(p.care?KIDDIE_NOTES.join(' '):monthly()?`${p.name} covers ${p.minSessions} class days; renew with the center.`:p.minSessions>1?`${p.name} bookings need at least ${p.minSessions} sessions.`:'Book one or more sessions.')+(rate==null?'':' The total uses the per-session package rate.');
 }
 function sessionRows(sessions,time){return sessions.map(s=>{const row=node('div',undefined,'review-session');row.append(node('span',dateLabel(s.date)),node('span',slotLabel(time,getLength())));if(s.meetLink){const meet=node('a','Google Meet','meet-link');meet.href=s.meetLink;meet.target='_blank';meet.rel='noopener';row.append(meet);}return row;});}
 const bookingBranch=()=>state.mode==='online'?'online':state.branch;
+// GCash QR codes for this booking: the ones assigned to the chosen location, or those marked for online bookings.
+function payQrs(){
+  const all=state.paymentQrs||[];
+  if(bookingBranch()==='online')return all.filter(q=>q.online);
+  return (branchById(state.branches,state.branch)?.paymentQrs||[]).map(id=>all.find(q=>q.id===id)).filter(Boolean);
+}
+function renderPayQrs(qrs){
+  const account=(name,number)=>{const dl=node('dl',undefined,'pay-account');for(const [dt,dd] of [['Account name',name],['GCash number',number],['Amount','The total above']]){const row=node('div');row.append(node('dt',dt),node('dd',dd));dl.append(row);}return dl;};
+  if(!qrs.length){
+    const box=node('div',undefined,'pay-qr'),ph=node('div',undefined,'qr-placeholder');ph.setAttribute('role','img');ph.setAttribute('aria-label','GCash QR code, coming soon');ph.append(node('span','GCash QR code'),node('small','Coming soon'));
+    box.append(ph,account('To be announced','To be announced'));$('pay-qrs').replaceChildren(box);return;
+  }
+  $('pay-qrs').replaceChildren(...qrs.map(q=>{
+    const box=node('div',undefined,'pay-qr'),figure=node('div',undefined,'pay-qr-figure'),img=node('img',undefined,'pay-qr-img'),save=node('a','Save QR image','pay-qr-save');
+    img.src='/'+q.image;img.alt=`GCash QR code for ${q.name}`;img.width=150;img.height=150;img.decoding='async';
+    save.href='/'+q.image;save.download=`kiean-gcash-${q.id}`;
+    figure.append(img,save);box.append(figure,account(q.name,q.number));return box;
+  }));
+}
 // Check files as soon as they are chosen: drop unusable ones and say why next to the field, so the parent can pick again.
 function keepValidFiles(input,limit){
   const files=[...input.files],problems=[];

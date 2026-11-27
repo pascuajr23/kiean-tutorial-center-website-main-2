@@ -4,7 +4,7 @@ import {resolve,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {BlockList,isIPv6} from 'node:net';
-import {loadConfig,publicConfig,validateTeacherRoster,validateBranches,validatePrograms,validateGalleries} from './lib/config.mjs';
+import {loadConfig,publicConfig,validateTeacherRoster,validateBranches,validatePrograms,validateGalleries,validatePaymentQrs} from './lib/config.mjs';
 import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './shared.mjs';
 import {GoogleCalendar} from './lib/calendar.mjs';
 import {GoogleOAuth,CENTER_SCOPES} from './lib/google-oauth.mjs';
@@ -113,7 +113,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           noteFailure(ip);
           res.writeHead(303,{'Location':'/admin?error=1'});res.end();return;
         }
-        const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/branch-photos';
+        const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/payment-qrs'||url.pathname==='/api/admin/branch-photos';
         if(adminApi){
           if(config.preview)throw new BookingError('Teacher management is available only in live mode.',503);
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
@@ -144,19 +144,19 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           branches:[...new Set([...t.branches,...branches.map(b=>b.id)])],
           // Class programs need their own class period; Mon–Fri 8 AM–5 PM, 10 seats, until the admin edits it.
           weekly:programs.some(p=>p.group)?Object.fromEntries([0,1,2,3,4,5,6].map(d=>[d,[...(t.weekly[d]||[]),...(d>=1&&d<=5?programs.filter(p=>p.group).map(p=>['08:00','17:00',p.id,10]):[])]]).filter(([,r])=>r.length)):t.weekly});
-        const checkRemoval=(kind,current,next,remove)=>{
+        const checkRemoval=(kind,current,next,remove,toggle='Accepting bookings',state='accepting bookings')=>{
           const ids=new Set(next.map(x=>x.id)),removed=current.filter(x=>!ids.has(x.id));
           if(!removed.length)return null;
           if(removed.length>1)throw new BookingError(`Delete one ${kind} at a time.`,409);
           const [item]=removed;
-          if(item.available!==false)throw new BookingError(`${item.name} is still accepting bookings. Turn off “Accepting bookings” and save first; only disabled ${kind}s can be deleted.`,409);
+          if(item.available!==false)throw new BookingError(`${item.name} is still ${state}. Turn off “${toggle}” and save first; only disabled ${kind}s can be deleted.`,409);
           if(typeof remove?.id!=='string'||remove.id!==item.id||remove.name!==item.name)throw new BookingError(`To delete ${item.name}, type its exact name.`,409);
           return item;
         };
         if(url.pathname==='/api/admin/branches'){
           if(req.method==='GET'){json(200,{branches:config.branches});return;}
           const body=await readJson(200000);
-          let branches;try{branches=validateBranches(body?.branches);}catch(error){throw new BookingError(error.message);}
+          let branches;try{branches=validateBranches(body?.branches,config.paymentQrs||[]);}catch(error){throw new BookingError(error.message);}
           const gone=checkRemoval('location',config.branches,branches,body.remove);
           if(gone&&config.teachers.some(t=>t.branches.includes(gone.id)))throw new BookingError(`${gone.name} still has teachers. Move them to another location first.`,409);
           const teachers=withDefaultTeacher({branches:branches.filter(b=>!config.branches.some(x=>x.id===b.id))});
@@ -172,9 +172,17 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           // Teachers and locations must still be valid with the new list before it replaces the live one.
           setPrograms(programs);
           const teachers=withDefaultTeacher({programs:programs.filter(p=>p.mode&&!config.programs.some(x=>x.id===p.id))});
-          try{validateBranches(config.branches);validateTeacherRoster(structuredClone(teachers),config.branches);await saveConfig({programs,teachers});}
+          try{validateBranches(config.branches,config.paymentQrs||[]);validateTeacherRoster(structuredClone(teachers),config.branches);await saveConfig({programs,teachers});}
           catch(error){setPrograms(config.programs);throw error instanceof BookingError||!error.code?new BookingError(error.message,409):error;}
           json(200,{programs,teachers:withGoogle(config.teachers)});return;
+        }
+        if(url.pathname==='/api/admin/payment-qrs'){
+          if(req.method==='GET'){json(200,{paymentQrs:config.paymentQrs||[]});return;}
+          const body=await readJson(100000);
+          let paymentQrs;try{paymentQrs=validatePaymentQrs(body?.paymentQrs);}catch(error){throw new BookingError(error.message);}
+          const gone=checkRemoval('payment QR',config.paymentQrs||[],paymentQrs,body.remove,'Show on booking page','shown on the booking page');
+          if(gone){const used=config.branches.filter(b=>b.paymentQrs?.includes(gone.id)).map(b=>b.name);if(used.length)throw new BookingError(`${gone.name} is still assigned to ${used.join(', ')}. Remove it from those locations first.`,409);}
+          await saveConfig({paymentQrs});json(200,{paymentQrs});return;
         }
         if(url.pathname==='/api/admin/galleries'){
           if(req.method==='GET'){json(200,{galleries:config.galleries||DEFAULT_GALLERIES});return;}
@@ -193,7 +201,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         }
         if(url.pathname==='/api/admin/teachers'){
           if(req.method==='GET'){
-            json(200,{programs:config.programs,galleries:config.galleries||DEFAULT_GALLERIES,branches:config.branches,teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))})),center:{email:config.centerEmail||null,connected:Boolean(store?.hasGoogleToken(CENTER_ID))}});return;
+            json(200,{programs:config.programs,galleries:config.galleries||DEFAULT_GALLERIES,paymentQrs:config.paymentQrs||[],branches:config.branches,teachers:config.teachers.map(t=>({...t,googleConnected:Boolean(store?.hasGoogleToken(t.id))})),center:{email:config.centerEmail||null,connected:Boolean(store?.hasGoogleToken(CENTER_ID))}});return;
           }
           const body=await readJson(100000);
           if(!Array.isArray(body?.teachers))throw new BookingError('A teacher list is required.');

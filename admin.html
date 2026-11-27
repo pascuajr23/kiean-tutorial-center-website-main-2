@@ -7,9 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Teacher availability | KieAn Tutorial Center</title>
   <link rel="icon" href="assets/kiean-icon.png">
-  <link rel="stylesheet" href="style.css?v=20261112-14">
-  <link rel="stylesheet" href="admin.css?v=20261112-14">
-  <link rel="stylesheet" href="admin-responsive.css?v=20261112-14">
+  <link rel="stylesheet" href="style.css?v=20261127-1">
+  <link rel="stylesheet" href="admin.css?v=20261127-1">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261127-1">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -25,7 +25,8 @@
         <a class="admin-choice" href="#programs"><span class="admin-choice-icon" aria-hidden="true">🎒</span><strong>Programs</strong><span>Program details, prices, Kiddie Care rates and homepage cards.</span></a>
         <a class="admin-choice" href="#locations"><span class="admin-choice-icon" aria-hidden="true">📍</span><strong>Locations</strong><span>Branch addresses, photos, programs and service areas.</span></a>
       </nav>
-      <nav class="admin-choices admin-choices-small" aria-label="Homepage photos">
+      <nav class="admin-choices admin-choices-small" aria-label="Payments and homepage photos">
+        <a class="admin-choice" href="#payments"><span class="admin-choice-icon" aria-hidden="true">💳</span><strong>Payment QR</strong><span>GCash QR codes parents pay with, assigned to each location.</span></a>
         <a class="admin-choice" href="#permits"><span class="admin-choice-icon" aria-hidden="true">📜</span><strong>Permits</strong><span>Permit and registration photos on the homepage.</span></a>
         <a class="admin-choice" href="#feedback"><span class="admin-choice-icon" aria-hidden="true">💬</span><strong>Feedback</strong><span>Parent feedback screenshots on the homepage.</span></a>
       </nav>
@@ -65,6 +66,13 @@
       <div class="admin-actions"><span class="delete-hint">JPG, PNG or WebP · 5 MB each · up to 30. Changes show on the homepage after you save.</span><button id="save-gallery" class="button button-primary" type="button">Save photos</button></div>
     </section>
     </div>
+    <div id="view-payments" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
+    <section class="locations" aria-labelledby="payments-title">
+      <div class="locations-head"><div><span class="admin-kicker">WEBSITE &amp; BOOKING</span><h2 id="payments-title">Payment QR codes</h2><p>GCash QR codes parents scan at the last booking step. Upload each QR here, then assign it in Locations; one QR can serve several locations.</p></div><button id="add-qr" class="button button-secondary" type="button"><span aria-hidden="true">+</span> Add QR code</button></div>
+      <div id="qr-list" class="teacher-list teacher-overview"></div>
+    </section>
+    </div>
     <div id="view-locations" hidden>
     <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
     <section class="locations" aria-labelledby="locations-title">
@@ -82,9 +90,26 @@
         <label class="availability-switch"><input type="checkbox" name="available"> Accepting bookings</label>
         <fieldset class="location-block"><legend>Programs offered</legend><div id="location-programs" class="choice-list"></div></fieldset>
         <fieldset class="location-block"><legend>Service areas</legend><p class="selection-hint">Families in these cities can book this location. Online teachers based here serve the same cities.</p><div id="location-areas"></div></fieldset>
+        <fieldset class="location-block"><legend>Payment QR codes</legend><p class="selection-hint">Parents booking this location see these QR codes at the payment step. Add new codes in Payment QR.</p><div id="location-qrs" class="choice-list"></div></fieldset>
         <fieldset class="location-block"><legend>Photos</legend><ul id="location-photos" class="photo-list"></ul><label class="file-field">Add photos <span>(JPG, PNG or WebP · 5 MB each · up to 12)</span><input id="location-photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple></label><small id="photo-status" class="file-count" aria-live="polite"></small></fieldset>
       </div>
       <div class="location-actions"><button id="delete-location" class="draft-remove" type="button">Delete location</button><small id="location-delete-hint" class="delete-hint">To delete, turn off “Accepting bookings” and save first.</small><button class="button button-primary" type="submit">Save location</button></div>
+    </form>
+  </dialog>
+  <dialog id="qr-editor" class="popup location-editor" aria-labelledby="qr-editor-title">
+    <form id="qr-form">
+      <div class="popup-head"><h2 id="qr-editor-title">Payment QR code</h2><button class="popup-close" type="button" aria-label="Close">×</button></div>
+      <div class="popup-body">
+        <div class="qr-upload"><img id="qr-preview" alt="QR code preview" hidden><label class="file-field">QR code image <span>(JPG, PNG or WebP · 5 MB)</span><input id="qr-image-input" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+        <label class="admin-field">Label <span class="field-note">(optional, for your list, e.g. “GCash · General Trias branches”)</span><input name="label" maxlength="80"></label>
+        <label class="admin-field">Account name<input name="name" required maxlength="80" autocomplete="off"></label>
+        <label class="admin-field">GCash number<input name="number" required maxlength="24" inputmode="tel" autocomplete="off" placeholder="0917 123 4567"></label>
+        <label class="availability-switch"><input type="checkbox" name="online"> Use for online tutorial bookings</label>
+        <label class="availability-switch"><input type="checkbox" name="available"> Show on booking page</label>
+        <p id="qr-used" class="selection-hint"></p>
+        <small id="qr-status" class="file-count" role="status" aria-live="polite"></small>
+      </div>
+      <div class="location-actions"><button id="delete-qr" class="draft-remove" type="button">Delete QR code</button><small id="qr-delete-hint" class="delete-hint">To delete, turn off “Show on booking page”, remove it from every location and save first.</small><button class="button button-primary" type="submit">Save QR code</button></div>
     </form>
   </dialog>
   <dialog id="program-editor" class="popup location-editor" aria-labelledby="program-editor-title">
@@ -138,6 +163,6 @@
       <div class="location-actions"><button id="delete-cancel" class="button button-secondary" type="button">Cancel</button><button id="delete-next" class="button button-danger" type="submit">Continue</button></div>
     </form>
   </dialog>
-  <script type="module" src="admin.js?v=20261112-14"></script>
+  <script type="module" src="admin.js?v=20261127-1"></script>
 </body>
 </html>
