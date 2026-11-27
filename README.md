@@ -11,7 +11,7 @@
 ![Node.js 24](https://img.shields.io/badge/node-24%2B-339933.svg)
 ![Zero dependencies](https://img.shields.io/badge/dependencies-0-success.svg)
 
-[Live site](https://kieantutorial.com) · [Deploy guide](DEPLOY.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+[Live site](https://kieantutorial.com) · [Roadmap](ROADMAP.md) · [Deploy guide](DEPLOY.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -91,6 +91,7 @@ flowchart LR
 
 ## Documentation
 
+- **[ROADMAP.md](ROADMAP.md):** what has shipped, what is next, and the phases for growing to many branches and centers.
 - **[DEPLOY.md](DEPLOY.md):** from an empty server to a live site, with Google Cloud setup, Docker, Caddy, Cloudflare, backups and troubleshooting.
 - **[SECURITY.md](SECURITY.md):** how to report a vulnerability privately.
 - **[CONTRIBUTING.md](CONTRIBUTING.md):** how to propose changes.
