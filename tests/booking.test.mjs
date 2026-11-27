@@ -5,6 +5,9 @@ import {mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {BookingStore} from '../lib/store.mjs';
+import {runBackup,phDay,msUntilPhMidnight} from '../lib/backup.mjs';
+import {DatabaseSync} from 'node:sqlite';
+import {mkdirSync} from 'node:fs';
 import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
 import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
@@ -797,4 +800,51 @@ test('fuzz: 300 malformed bookings get clear errors, never a crash; broken HTTP 
     const r=await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:config.publicOrigin,'Content-Type':type},body});
     assert(r.status>=400&&r.status<500,`${type} ${body.slice(0,20)} gave ${r.status}`);
   }
+});
+
+test('daily backups copy the database, settings and photos, keeping the newest 14 days',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-backup-'));
+  try{
+    const store=new BookingStore(join(dir,'bookings.sqlite'));
+    store.db.prepare("INSERT INTO bookings(id,request_key,digest,status,payload,created_at) VALUES('b1','k1','d','confirmed','{}','2026-11-01')").run();
+    writeFileSync(join(dir,'config.json'),'{"mode":"live"}');
+    mkdirSync(join(dir,'photos'));writeFileSync(join(dir,'photos','a.webp'),'x');
+    const options={store,configFile:join(dir,'config.json'),photosDir:join(dir,'photos'),dir:join(dir,'backups')};
+    for(let day=1;day<=16;day++)runBackup({...options,now:new Date(Date.UTC(2026,10,day,12))});
+    const last=runBackup({...options,now:new Date(Date.UTC(2026,10,16,14))});
+    const days=readdirSync(options.dir).sort();
+    assert.equal(days.length,14);assert.equal(days[0],'2026-11-03');assert.equal(days.at(-1),'2026-11-16');
+    const copy=new DatabaseSync(join(last,'bookings.sqlite'));
+    assert.equal(copy.prepare('SELECT id FROM bookings').get().id,'b1');copy.close();
+    assert.equal(readFileSync(join(last,'config.json'),'utf8'),'{"mode":"live"}');
+    assert.equal(readFileSync(join(last,'branch-photos','a.webp'),'utf8'),'x');
+    store.close();
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('backups are named by the Philippine date and scheduled for Philippine midnight',()=>{
+  assert.equal(phDay(new Date('2026-11-27T15:59:00Z')),'2026-11-27');
+  assert.equal(phDay(new Date('2026-11-27T16:00:01Z')),'2026-11-28');
+  assert.equal(msUntilPhMidnight(new Date('2026-11-27T15:00:00Z')),3_600_000);
+  assert.equal(msUntilPhMidnight(new Date('2026-11-27T16:00:00Z')),86_400_000);
+});
+
+test('admin can back up now, see the latest backup and download its files',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'kiean-backup-api-'));
+  const store=new BookingStore(join(dir,'bookings.sqlite'));
+  const configPath=join(dir,'config.json');writeFileSync(configPath,'{"mode":"live"}');
+  const app=createApp({config:{...config,mode:'live',publicOrigin:'http://localhost'},store,configPath,photosDir:join(dir,'photos'),backupDir:join(dir,'backups'),adminCredentials:{username:'center-admin',password:'private-password'}});
+  await new Promise(r=>app.listen(0,'127.0.0.1',r));
+  const base=`http://127.0.0.1:${app.address().port}`,auth={authorization:'Basic '+Buffer.from('center-admin:private-password').toString('base64')};
+  try{
+    assert.equal((await fetch(base+'/api/admin/backups')).status,401);
+    assert.deepEqual((await (await fetch(base+'/api/admin/backups',{headers:auth})).json()).backups,[]);
+    assert.equal((await fetch(base+'/api/admin/backups',{method:'POST',headers:{...auth,origin:'http://evil.test'}})).status,403);
+    const made=await (await fetch(base+'/api/admin/backups',{method:'POST',headers:{...auth,origin:'http://localhost'}})).json();
+    assert.equal(made.backups.length,1);assert.equal(made.backups[0].day,phDay(new Date()));assert.ok(made.backups[0].database&&made.backups[0].settings);
+    const settings=await fetch(`${base}/api/admin/backups/${made.backups[0].day}/config.json`,{headers:auth});
+    assert.equal(settings.status,200);assert.match(settings.headers.get('content-disposition'),/attachment/);assert.equal(await settings.text(),'{"mode":"live"}');
+    assert.equal((await fetch(`${base}/api/admin/backups/${made.backups[0].day}/bookings.sqlite`,{headers:auth})).status,200);
+    for(const bad of ['../config.json','2026-01-01/config.json','2026-11-27/kiean.env','2026-11-27/%2e%2e%2fconfig.json'])assert.equal((await fetch(`${base}/api/admin/backups/${bad}`,{headers:auth})).status,404,bad);
+  }finally{app.close();store.close();rmSync(dir,{recursive:true,force:true});}
 });

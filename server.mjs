@@ -10,6 +10,7 @@ import {DEFAULT_PROGRAMS,DEFAULT_GALLERIES,setPrograms} from './public/shared.mj
 import {GoogleCalendar} from './lib/calendar.mjs';
 import {GoogleOAuth,CENTER_SCOPES} from './lib/google-oauth.mjs';
 import {GmailMailer,CENTER_ID} from './lib/mailer.mjs';
+import {scheduleBackups,runBackup,listBackups} from './lib/backup.mjs';
 import {BookingStore} from './lib/store.mjs';
 import {BookingService} from './lib/booking-service.mjs';
 import {BookingError,validateAttachments} from './lib/domain.mjs';
@@ -61,7 +62,7 @@ export function clientIp(req,mode=process.env.TRUST_PROXY){
   if(mode==='cloudflare'&&fromCloudflare(hop))return req.headers['cf-connecting-ip']?.trim()||hop;
   return hop;
 }
-export function createApp({config,service,store,oauth,calendar,adminCredentials={username:process.env.KIEAN_ADMIN_USER,password:process.env.KIEAN_ADMIN_PASSWORD},configPath,photosDir=resolve(process.env.KIEAN_DATA_DIR||'data','branch-photos')}={}){
+export function createApp({config,service,store,oauth,calendar,adminCredentials={username:process.env.KIEAN_ADMIN_USER,password:process.env.KIEAN_ADMIN_PASSWORD},configPath,photosDir=resolve(process.env.KIEAN_DATA_DIR||'data','branch-photos'),backupDir=resolve(process.env.KIEAN_DATA_DIR||'data','backups')}={}){
   // Configs built without programs (tests, older files) use the defaults; the live list is module state in shared.mjs.
   config.programs??=structuredClone(DEFAULT_PROGRAMS);setPrograms(config.programs);
   const rate=new Map();
@@ -128,7 +129,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           noteFailure(ip);
           res.writeHead(303,{'Location':'/admin?error=1'});res.end();return;
         }
-        const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/payment-qrs'||url.pathname==='/api/admin/branch-photos';
+        const adminApi=url.pathname==='/api/admin/teachers'||url.pathname==='/api/admin/branches'||url.pathname==='/api/admin/programs'||url.pathname==='/api/admin/galleries'||url.pathname==='/api/admin/payment-qrs'||url.pathname==='/api/admin/branch-photos'||url.pathname==='/api/admin/backups'||url.pathname.startsWith('/api/admin/backups/');
         if(adminApi){
           if(config.preview)throw new BookingError('Teacher management is available only in live mode.',503);
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
@@ -192,6 +193,19 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           try{validateBranches(config.branches,config.paymentQrs||[]);validateTeacherRoster(structuredClone(teachers),config.branches);await saveConfig({programs,teachers});}
           catch(error){setPrograms(config.programs);throw error instanceof BookingError||!error.code?new BookingError(error.message,409):error;}
           json(200,{programs,teachers:withGoogle(config.teachers)});return;
+        }
+        if(url.pathname==='/api/admin/backups'){
+          if(req.method==='POST'){
+            if(!store)throw new BookingError('Backups need the booking database.',503);
+            runBackup({store,configFile:configPath||config.configFile,photosDir,dir:backupDir});
+          }else if(req.method!=='GET')throw new BookingError('Method not allowed.',405);
+          json(200,{backups:listBackups(backupDir),keepDays:14});return;
+        }
+        const backupFile=url.pathname.match(/^\/api\/admin\/backups\/(\d{4}-\d{2}-\d{2})\/(bookings\.sqlite|config\.json)$/);
+        if(url.pathname.startsWith('/api/admin/backups/')){
+          if(!backupFile||req.method!=='GET')throw new BookingError('Backup file not found.',404);
+          let data;try{data=await readFile(resolve(backupDir,backupFile[1],backupFile[2]));}catch{throw new BookingError('Backup file not found.',404);}
+          res.writeHead(200,{'Content-Type':backupFile[2].endsWith('.json')?'application/json':'application/vnd.sqlite3','Content-Disposition':`attachment; filename="kiean-${backupFile[1]}-${backupFile[2]}"`,'Cache-Control':'no-store'});res.end(data);return;
         }
         if(url.pathname==='/api/admin/payment-qrs'){
           if(req.method==='GET'){json(200,{paymentQrs:config.paymentQrs||[]});return;}
@@ -340,6 +354,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const calendar=config.preview?null:new GoogleCalendar({store,oauth});
   const service=config.preview?null:new BookingService(config,store,calendar,{mailer:new GmailMailer({calendar}),uploadsDir:resolve(process.env.KIEAN_DATA_DIR||'data','uploads')});
   const server=createApp({config,service,store,oauth,calendar});
+  if(store)scheduleBackups({store,configFile:config.configFile,photosDir:resolve(process.env.KIEAN_DATA_DIR||'data','branch-photos'),dir:resolve(process.env.KIEAN_DATA_DIR||'data','backups')});
   server.listen(config.port,process.env.HOST||'127.0.0.1',()=>console.log(`KieAn website listening on http://${process.env.HOST||'127.0.0.1'}:${config.port} (${config.preview?'PREVIEW — no calendar writes':'LIVE'})`));
   const stop=()=>server.close(()=>{store?.close();process.exit(0);});process.on('SIGTERM',stop);process.on('SIGINT',stop);
 }

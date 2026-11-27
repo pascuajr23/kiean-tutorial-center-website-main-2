@@ -261,7 +261,11 @@ docker compose start kiean
 
 **After editing `kiean.env` or `config.json` by hand:** `docker compose up -d --force-recreate` (use `sudo nano` for the config, which uid 1000 owns). Changes saved in `/admin` apply immediately.
 
-**Back up** `config/`, `data/` (SQLite database, uploaded photos, QR codes and receipts) and `kiean.env` together, encrypted and off the server:
+**Automatic backups.** Every midnight, Philippine time, the live site saves the booking database, `config.json` and the branch, QR and gallery photos to `data/backups/YYYY-MM-DD/`, keeping the newest 14 days. The database copy is taken safely while the site runs. In `/admin` → **Backups**, staff can see the latest backup, back up now, and download any day's bookings database or settings. Receipts and `kiean.env` are not included. To restore a day, stop the container, copy that folder's `bookings.sqlite` to `data/`, `config.json` to `config/` and `branch-photos/` to `data/`, then start it again.
+
+These copies sit on the same disk as the site, so they protect against a bad edit or a damaged database, not a lost server. For that, also keep an encrypted copy off the server.
+
+**Full backup** of `config/`, `data/` (SQLite database, uploaded photos, QR codes, receipts and the daily backups) and `kiean.env` together, encrypted and off the server:
 
 ```sh
 docker compose stop kiean && sudo tar czf kiean-$(date +%F).tgz config data kiean.env && docker compose start kiean

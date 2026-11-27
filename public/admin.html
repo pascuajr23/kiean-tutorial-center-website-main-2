@@ -7,9 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Teacher availability | KieAn Tutorial Center</title>
   <link rel="icon" href="assets/kiean-icon.png">
-  <link rel="stylesheet" href="style.css?v=20261127-13">
-  <link rel="stylesheet" href="admin.css?v=20261127-13">
-  <link rel="stylesheet" href="admin-responsive.css?v=20261127-13">
+  <link rel="stylesheet" href="style.css?v=20261127-15">
+  <link rel="stylesheet" href="admin.css?v=20261127-15">
+  <link rel="stylesheet" href="admin-responsive.css?v=20261127-15">
 </head>
 <body class="admin-page">
   <header class="admin-header">
@@ -29,6 +29,7 @@
         <a class="admin-choice" href="#payments"><span class="admin-choice-icon" aria-hidden="true">💳</span><strong>Payment QR</strong><span>GCash QR codes parents pay with, assigned to each location.</span></a>
         <a class="admin-choice" href="#permits"><span class="admin-choice-icon" aria-hidden="true">📜</span><strong>Permits</strong><span>Permit and registration photos on the homepage.</span></a>
         <a class="admin-choice" href="#feedback"><span class="admin-choice-icon" aria-hidden="true">💬</span><strong>Feedback</strong><span>Parent feedback screenshots on the homepage.</span></a>
+        <a class="admin-choice" href="#backups"><span class="admin-choice-icon" aria-hidden="true">🗄️</span><strong>Backups</strong><span>Daily copies of bookings, settings and photos. Back up now or download one.</span></a>
       </nav>
       <section class="center-account" aria-labelledby="center-title">
       <div><h2 id="center-title">Admin Google account</h2><p>Sends booking emails and the online-lesson invitations with Google Meet links.</p></div>
@@ -64,6 +65,14 @@
       <small id="gallery-status" class="file-count" role="status" aria-live="polite"></small>
       <ol id="gallery-list" class="gallery-admin"></ol>
       <div class="admin-actions"><span class="delete-hint">JPG, PNG or WebP · 5 MB each · up to 30. Changes show on the homepage after you save.</span><button id="save-gallery" class="button button-primary" type="button">Save photos</button></div>
+    </section>
+    </div>
+    <div id="view-backups" hidden>
+    <a class="admin-back" href="#"><span aria-hidden="true">←</span> Admin home</a>
+    <section class="locations backups" aria-labelledby="backups-title">
+      <div class="locations-head"><div><span class="admin-kicker">SAFETY</span><h2 id="backups-title">Backups</h2><p>The site saves the booking database, settings and all uploaded photos every midnight, Philippine time, and keeps the newest 14 days. Receipts and server secrets are not included.</p></div><button id="backup-now" class="button button-secondary" type="button">Back up now</button></div>
+      <div id="backup-latest" class="backup-latest" aria-live="polite"></div>
+      <div id="backup-list" class="backup-list"></div>
     </section>
     </div>
     <div id="view-payments" hidden>
@@ -178,6 +187,6 @@
       <div class="location-actions"><button id="delete-cancel" class="button button-secondary" type="button">Cancel</button><button id="delete-next" class="button button-danger" type="submit">Continue</button></div>
     </form>
   </dialog>
-  <script type="module" src="admin.js?v=20261127-13"></script>
+  <script type="module" src="admin.js?v=20261127-15"></script>
 </body>
 </html>

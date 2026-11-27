@@ -488,7 +488,7 @@ window.addEventListener('beforeunload',event=>{if(galleryDirty)event.preventDefa
 // Home shows big choices; #teachers, #programs and #locations are separate screens.
 let view='';
 function route(){
-  const next=['teachers','programs','locations','payments','permits','feedback'].includes(location.hash.slice(1))?location.hash.slice(1):'';
+  const next=['teachers','programs','locations','payments','permits','feedback','backups'].includes(location.hash.slice(1))?location.hash.slice(1):'';
   if(galleryDirty&&galleryKind&&next!==galleryKind){if(!confirm('Discard unsaved photo changes?')){location.hash=galleryKind;return;}galleryDirty=false;}
   if(view==='teachers'&&next!=='teachers'&&editing!==null){
     if(dirty&&!confirm('Discard unsaved changes to this teacher?')){location.hash='teachers';return;}
@@ -496,11 +496,38 @@ function route(){
   }
   view=next;
   const screen=GALLERY[next]?'gallery':next||'home';
-  for(const id of ['home','teachers','programs','locations','payments','gallery'])$(`#view-${id}`).hidden=id!==screen;
+  for(const id of ['home','teachers','programs','locations','payments','gallery','backups'])$(`#view-${id}`).hidden=id!==screen;
   galleryKind=null;if(GALLERY[next])openGalleryEditor(next);
+  if(next==='backups')loadBackups();
   if(message.dataset.kind!=='error')message.hidden=true;
   window.scrollTo(0,0);
 }
+// ---- Backups: automatic every midnight PH time; staff can back up now and download the database or settings ----
+const phTime=iso=>new Date(iso).toLocaleString('en-PH',{timeZone:'Asia/Manila',dateStyle:'medium',timeStyle:'short'});
+const sizeText=bytes=>bytes>=1048576?`${(bytes/1048576).toFixed(1)} MB`:`${Math.max(1,Math.round(bytes/1024))} KB`;
+function backupLinks(b){
+  const links=node('div','backup-links');
+  if(b.database){const a=node('a','button button-secondary','Download bookings');a.href=`/api/admin/backups/${b.day}/bookings.sqlite`;links.append(a);}
+  if(b.settings){const a=node('a','button button-secondary','Download settings');a.href=`/api/admin/backups/${b.day}/config.json`;links.append(a);}
+  return links;
+}
+function renderBackups(list){
+  const latest=$('#backup-latest');
+  if(!list.length){latest.replaceChildren(node('p','backup-empty','No backup yet. The first one runs tonight at midnight, or press Back up now.'));$('#backup-list').replaceChildren();return;}
+  const [newest,...older]=list,info=node('div','backup-info');
+  info.append(node('span','backup-label','Latest backup'),node('strong','',phTime(newest.savedAt)),node('span','backup-detail',`${sizeText(newest.size)} · bookings${newest.settings?', settings':''} and ${newest.photos} photo${newest.photos===1?'':'s'}`));
+  latest.replaceChildren(info,backupLinks(newest));
+  $('#backup-list').replaceChildren(...older.map(b=>{const row=node('div','backup-row'),text=node('div');text.append(node('strong','',phTime(b.savedAt)),node('span','backup-detail',sizeText(b.size)));row.append(text,backupLinks(b));return row;}));
+}
+async function loadBackups(){
+  try{renderBackups((await request('/api/admin/backups')).backups);}catch(error){setMessage(error.message,'error');}
+}
+$('#backup-now').addEventListener('click',async event=>{
+  const button=event.currentTarget;button.disabled=true;button.textContent='Backing up…';
+  try{renderBackups((await request('/api/admin/backups',{method:'POST'})).backups);setMessage('Backup saved.','success');}
+  catch(error){setMessage(error.message,'error');}
+  finally{button.disabled=false;button.textContent='Back up now';}
+});
 window.addEventListener('hashchange',route);route();
 
 // ---- Programs: homepage cards, bookable programs and their prices (Kiddie Care has its own rate table) ----

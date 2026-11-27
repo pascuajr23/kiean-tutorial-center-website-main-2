@@ -66,7 +66,7 @@ An admin panel at `/admin` runs the whole site, with no code edits:
 - **Security:** strict Content Security Policy, HSTS, framing blocked, admin sign-in lockout, per-visitor rate limits that understand Cloudflare, abuse limits on bookings, and Google tokens encrypted at rest (AES-256-GCM). Reviewed with Cloudflare's security-audit methodology.
 - **Privacy, child safety and the law:** child-safety rules for online lessons (RA 7610 and RA 11930), rights for families abroad (EU, UK and similar privacy and cancellation rules) alongside Philippine law, separate privacy consent at booking, a privacy policy naming the Data Protection Officer (Data Privacy Act, RA 10173), seller disclosure on every page and email (Internet Transactions Act, RA 11967), refund, cookie and consent-form pages, and children's names and faces redacted from public photos.
 - **Fast and findable:** PageSpeed mobile performance 99, self-hosted fonts, compressed WebP images, structured data, sitemap, canonical URLs and a friendly 404 page.
-- **Safe to run:** an unprivileged, read-only Docker container with a health check, secrets kept out of git and the image, and a test suite that runs without a Google account.
+- **Safe to run:** an unprivileged, read-only Docker container with a health check, daily automatic backups of bookings, settings and photos, secrets kept out of git and the image, and a test suite that runs without a Google account.
 
 ## How it works
 
