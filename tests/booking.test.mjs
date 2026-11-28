@@ -511,7 +511,7 @@ test('signed-in admins are not rate limited on any settings screen; anonymous wr
   t.after(async()=>{await new Promise(r=>app.close(r));store.close();rmSync(dir,{recursive:true,force:true});setPrograms(DEFAULT_PROGRAMS);});
   const base='http://127.0.0.1:'+app.address().port,auth={Authorization:'Basic '+Buffer.from('center-admin:private-password').toString('base64'),Origin:cfg.publicOrigin,'Content-Type':'application/json'};
   for(let i=0;i<15;i++){const order=i%2?[...cfg.programs].reverse():cfg.programs;assert.equal((await fetch(base+'/api/admin/programs',{method:'POST',headers:auth,body:JSON.stringify({programs:order})})).status,200,`save ${i+1}`);}
-  let last;for(let i=0;i<12;i++)last=await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:cfg.publicOrigin,'Content-Type':'application/json'},body:'{}'});
+  let last;for(let i=0;i<32;i++)last=await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:cfg.publicOrigin,'Content-Type':'application/json'},body:'{}'});
   assert.equal(last.status,429);
 });
 test('admin edits the Permits and Feedback photos; only bundled or uploaded images are accepted',async t=>{
@@ -861,4 +861,14 @@ test('online invite uses an open Meet space so anyone with the link joins withou
   assert.equal(r.conferenceData.conferenceId,'abc-defg-hij');assert.equal(r.conferenceData.entryPoints[0].uri,'https://meet.google.com/abc-defg-hij');assert.equal(r.conferenceData.createRequest,undefined);
   assert.equal(invite.hangoutLink,'https://meet.google.com/abc-defg-hij');
   assert.ok(CENTER_SCOPES.includes('https://www.googleapis.com/auth/meetings.space.created'));
+});
+
+test('sign-in is not blocked by used-up booking requests, and a stray space or capital-free username still signs in',async t=>{
+  const app=createApp({config:{...config,mode:'live',publicOrigin:'http://localhost'},adminCredentials:{username:'center-admin',password:'private-password'}});
+  await new Promise(r=>app.listen(0,'127.0.0.1',r));t.after(()=>app.close());
+  const base='http://127.0.0.1:'+app.address().port,headers={Origin:'http://localhost','Content-Type':'application/x-www-form-urlencoded'};
+  for(let i=0;i<31;i++)await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:'http://localhost','Content-Type':'application/json'},body:'{}'});
+  assert.equal((await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:'http://localhost','Content-Type':'application/json'},body:'{}'})).status,429);
+  const signIn=await fetch(base+'/api/admin/login',{method:'POST',redirect:'manual',headers,body:new URLSearchParams({username:' center-admin ',password:'private-password'})});
+  assert.equal(signIn.status,303);assert.equal(signIn.headers.get('location'),'/admin');
 });

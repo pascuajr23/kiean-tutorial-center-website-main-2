@@ -1,6 +1,6 @@
 {
   "name": "kiean-tutorial-booking",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Website and teacher booking system for a tutoring center: Google Calendar availability, Meet invitations, Gmail confirmations, GCash QR payments and an admin panel. Zero dependencies.",
   "license": "MIT",
   "author": "Lyndon Pascua Jr",

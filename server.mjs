@@ -53,6 +53,7 @@ for(const cidr of ['173.245.48.0/20','103.21.244.0/22','103.22.200.0/22','103.31
 for(const cidr of ['2400:cb00::/32','2606:4700::/32','2803:f800::/32','2405:b500::/32','2405:8100::/32','2a06:98c0::/29','2c0f:f248::/32'])CLOUDFLARE.addSubnet(cidr.split('/')[0],Number(cidr.split('/')[1]),'ipv6');
 const plain=ip=>ip?.replace(/^::ffff:(?=\d+\.)/,'');
 const fromCloudflare=ip=>{ip=plain(ip);try{return Boolean(ip)&&CLOUDFLARE.check(ip,isIPv6(ip)?'ipv6':'ipv4');}catch{return false;}};
+const MAX_WRITES_PER_HOUR=30,MAX_READS_PER_HOUR=3000;
 export function clientIp(req,mode=process.env.TRUST_PROXY){
   const socket=plain(req.socket.remoteAddress);
   if(mode!=='1'&&mode!=='cloudflare')return socket;
@@ -108,9 +109,13 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
         if(!['GET','POST'].includes(req.method))throw new BookingError('Method not allowed.',405);
         const now=Date.now();let bucket=rate.get(ip);if(!bucket||now-bucket.since>3600000){bucket={since:now,reads:0,writes:0};rate.set(ip,bucket);}
         const field=req.method==='POST'?'writes':'reads';bucket[field]++;
-        // Signed-in admins save settings repeatedly; only anonymous traffic and sign-in attempts count toward the limit.
-        if(url.pathname.startsWith('/api/admin/')&&url.pathname!=='/api/admin/login'&&isAdmin(req))bucket[field]--;
-        else if(bucket[field]>(field==='writes'?10:600))throw new BookingError('Too many requests. Please wait before trying again.',429);
+        // Signed-in admins save settings repeatedly, and sign-in has its own wrong-password lockout, so neither spends the
+        // booking allowance. Limits are per address and generous because families on mobile data share carrier addresses.
+        if(url.pathname==='/api/admin/login'||url.pathname.startsWith('/api/admin/')&&isAdmin(req))bucket[field]--;
+        else if(bucket[field]>(field==='writes'?MAX_WRITES_PER_HOUR:MAX_READS_PER_HOUR)){
+          if(bucket[field]===(field==='writes'?MAX_WRITES_PER_HOUR:MAX_READS_PER_HOUR)+1)console.warn(`Rate limit reached for one address (${field}).`);
+          throw new BookingError('Too many requests. Please wait before trying again.',429);
+        }
         if(req.method==='POST'&&(url.pathname==='/api/admin/login'||url.pathname==='/api/admin/logout')){
           if(!adminCredentials.username||!adminCredentials.password)throw new BookingError('Admin sign-in is not configured on this server.',503);
           if(req.headers.origin!==config.publicOrigin)throw new BookingError('Sign in from the KieAn website.',403);
@@ -121,7 +126,7 @@ export function createApp({config,service,store,oauth,calendar,adminCredentials=
           const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>2000)throw new BookingError('Sign-in details are too long.',413);chunks.push(chunk);}
           const form=new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
           // Check both fields every time (bitwise &) so a wrong username takes as long as a wrong password.
-          if(sameSecret(form.get('username'),adminCredentials.username)&sameSecret(form.get('password'),adminCredentials.password)){
+          if(sameSecret((form.get('username')||'').trim(),adminCredentials.username)&sameSecret(form.get('password'),adminCredentials.password)){
             const token=randomBytes(32).toString('base64url');sessions.set(token,Date.now()+SESSION_MS);
             failures.delete(ip);
             res.writeHead(303,{'Location':'/admin','Set-Cookie':`kiean_admin=${token}; ${cookieFlags}; Max-Age=${SESSION_MS/1000}`});res.end();return;
