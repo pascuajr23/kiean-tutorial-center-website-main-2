@@ -169,10 +169,17 @@ export function seatsAt(teacher, program, day, time, periodType = program.id) {
   const period = (teacher.weekly[weekday(day)] || []).find(([start, end, type]) => type === periodType && minutes(start) <= minutes(time) && minutes(time) < periodEnd(start, end));
   return period?.[3] || 1;
 }
-// Group bookings may share a slot with the same program up to its seats; anything else needs the teacher free.
+// Face-to-face tutorials take 2 learners an hour (2 learners : 1 teacher); SPED stays one-to-one.
+export const F2F_SEATS = 2;
+export const sharesF2F = program => Boolean(program) && program.mode === 'branch' && !program.group && program.id !== 'sped';
+// Group bookings may share a slot with the same program up to its seats; face-to-face tutorials share with each other
+// up to F2F_SEATS; anything else (online, SPED, Google events, which carry no program) needs the teacher free.
 export function slotFree(bookings, start, end, programId, seats) {
   const clash = bookings.filter(b => overlap(start, end, Date.parse(b.start), Date.parse(b.end)));
-  return PROGRAMS.find(p => p.id === programId)?.group ? clash.every(b => b.programId === programId) && clash.length < seats : !clash.length;
+  const program = PROGRAMS.find(p => p.id === programId);
+  if (program?.group) return clash.every(b => b.programId === programId) && clash.length < seats;
+  if (sharesF2F(program)) return clash.every(b => sharesF2F(PROGRAMS.find(p => p.id === b.programId))) && clash.length < F2F_SEATS;
+  return !clash.length;
 }
 // Teacher schedules from the 2026 portfolio (pp. 28–34), Mon–Fri unless the PDF says MWF/TTh/M&F.
 // Open tutorial slots → 'f2f', "OPEN FOR SPED" → 'sped', online blocks → 'online', Playgroup/Nursery → class periods

@@ -15,7 +15,7 @@ import {validateBooking,validateAttachments,BookingError} from '../lib/domain.mj
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs,validateBranches} from '../lib/config.mjs';
 import {createApp,clientIp,siteVersion} from '../server.mjs';
-import {paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../public/shared.mjs';
+import {slotFree,sharesF2F,F2F_SEATS,paymentQrsFor,inGeoFence,upgradeAreas,icsForBooking,PREVIEW_TEACHERS,PROGRAMS,DEFAULT_PROGRAMS,DEFAULT_GALLERIES,PORTFOLIO_TEACHERS,setPrograms,kiddieQuote,PERIOD_TYPES,AREAS,DEFAULT_BRANCHES,branchById,areaBranches,teacherServes,matchArea,slotsForDay,manilaDay,sessionRate,addDays,scheduleSummary} from '../public/shared.mjs';
 const NOW=new Date('2030-06-01T00:00:00Z');
 const config={preview:false,publicOrigin:'https://kiean.example',leadMinutes:60,branches:structuredClone(DEFAULT_BRANCHES),teachers:[{...PREVIEW_TEACHERS[0],id:'teacher-1',name:'Test Teacher',googleEmail:'teacher@example.test'}]};
 const payload=()=>({requestId:randomUUID(),teacher:'teacher-1',program:'online',branch:'online',area:'laguna-pila',dates:['2030-06-03','2030-06-04','2030-06-05','2030-06-06','2030-06-07'],time:'10:00',parentName:'Test Parent',email:'parent@example.test',phone:'+639171234567',studentName:'Learner',grade:'Grade 3',notes:'Reading practice',consent:true,privacyConsent:true});
@@ -871,4 +871,23 @@ test('sign-in is not blocked by used-up booking requests, and a stray space or c
   assert.equal((await fetch(base+'/api/bookings',{method:'POST',headers:{Origin:'http://localhost','Content-Type':'application/json'},body:'{}'})).status,429);
   const signIn=await fetch(base+'/api/admin/login',{method:'POST',redirect:'manual',headers,body:new URLSearchParams({username:' center-admin ',password:'private-password'})});
   assert.equal(signIn.status,303);assert.equal(signIn.headers.get('location'),'/admin');
+});
+
+test('face-to-face tutorials take 2 learners an hour, never alongside online, SPED or Google events',async t=>{
+  setPrograms(DEFAULT_PROGRAMS);
+  const s=Date.parse('2030-06-03T02:00:00Z'),e=s+3600000,at=programId=>({start:new Date(s).toISOString(),end:new Date(e).toISOString(),programId});
+  assert.equal(F2F_SEATS,2);assert.ok(sharesF2F(PROGRAMS.find(p=>p.id==='academic')));assert.ok(!sharesF2F(PROGRAMS.find(p=>p.id==='sped')));
+  assert.ok(slotFree([at('academic')],s,e,'academic',1),'a second face-to-face learner fits');
+  assert.ok(slotFree([at('after-school')],s,e,'academic',1),'any two face-to-face tutorials share');
+  assert.ok(!slotFree([at('academic'),at('academic')],s,e,'academic',1),'a third does not');
+  assert.ok(!slotFree([at('academic')],s,e,'online',1),'online is blocked by a face-to-face booking');
+  assert.ok(!slotFree([at('online')],s,e,'academic',1),'face to face is blocked by an online booking');
+  assert.ok(!slotFree([at('academic')],s,e,'sped',1),'SPED stays one-to-one');
+  assert.ok(!slotFree([at('sped')],s,e,'academic',1));
+  assert.ok(!slotFree([{start:at().start,end:at().end}],s,e,'academic',1),'a Google event still blocks');
+  // the teacher's calendar entry must not block the second learner in Google free/busy
+  const bodies=[],c=new GoogleCalendar({store:{googleToken:()=>({refreshToken:'r'})},oauth:{async refresh(){return {accessToken:'a',expiresIn:3600};}},fetcher:async(url,o)=>{bodies.push(JSON.parse(o.body));return new Response('{}',{status:200});}});
+  const b={id:'b1',reference:'KTC-1',programId:'academic',programName:'Academic Tutorial',teacherId:'teacher-1',branch:'pila',sessions:[],lessonMinutes:60,slotMinutes:60};
+  await c.create(b,{date:'2030-06-03',start:at().start,end:at().end});await c.create({...b,programId:'sped'},{date:'2030-06-04',start:at().start,end:at().end});
+  assert.equal(bodies[0].transparency,'transparent');assert.equal(bodies[1].transparency,'opaque');
 });
