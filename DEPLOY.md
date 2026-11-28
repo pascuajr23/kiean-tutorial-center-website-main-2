@@ -43,11 +43,11 @@ Throughout, replace:
 The site uses Google sign-in (OAuth) so each teacher's calendar can be read and written, and so the center account can send Gmail and create Meet invitations. No API key is used.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
-2. **APIs & Services → Library:** enable **Google Calendar API** and **Gmail API**. Nothing else is needed.
+2. **APIs & Services → Library:** enable **Google Calendar API**, **Gmail API** and **Google Meet REST API**. Nothing else is needed.
 3. **Google Auth Platform → Branding:** set the app name, support email, your home page (`https://example.com`) and privacy policy (`https://example.com/privacy-policy`), and add `example.com` as an authorized domain.
 4. **Google Auth Platform → Data Access:** add these scopes:
    - `.../auth/calendar.events` and `.../auth/calendar.freebusy` (teachers)
-   - `.../auth/gmail.send` (center account)
+   - `.../auth/gmail.send` and `.../auth/meetings.space.created` (center account; the second makes Meet links that anyone with the link can join without being admitted)
    - `openid` and `.../auth/userinfo.email`
 5. **Google Auth Platform → Clients → Create client → Web application.** Under **Authorized redirect URIs** add exactly `https://example.com/api/google/callback`. Add no JavaScript origins. Copy the **Client ID** and **Client secret**.
 6. **Google Auth Platform → Audience:** switch the app to **In production** and complete Google's verification for the sensitive scopes.
@@ -214,7 +214,7 @@ Then open `https://example.com`. If the container stops, `docker compose logs ki
 
 Connections are made on the live site. Ones made on your computer stay on your computer.
 
-1. **Center account:** open `https://example.com/admin`, sign in, and click **Connect** under *Admin Google account* while signed in to Google as `centerEmail`. This lets the site send booking emails and online-lesson invitations with Google Meet links.
+1. **Center account:** open `https://example.com/admin`, sign in, and click **Connect** under *Admin Google account* while signed in to Google as `centerEmail`. This lets the site send booking emails and online-lesson invitations with Google Meet links. A center account connected before the Meet permission was added keeps working with the older Meet links, which admit only invited guests; click **Connect** again to approve it and switch to open links.
 2. **Each teacher:** send them `https://example.com/api/teachers/TEACHER_ID/google/connect` (the **Connect** link on their card in `/admin` → Teachers). They sign in with their `googleEmail` and approve calendar access. Unconnected teachers cannot be booked.
 
 ## 10. Set up the center in /admin

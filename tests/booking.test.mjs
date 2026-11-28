@@ -10,7 +10,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {mkdirSync} from 'node:fs';
 import {BookingService} from '../lib/booking-service.mjs';
 import {GoogleCalendar} from '../lib/calendar.mjs';
-import {GoogleOAuth,GOOGLE_SCOPES} from '../lib/google-oauth.mjs';
+import {GoogleOAuth,GOOGLE_SCOPES,CENTER_SCOPES} from '../lib/google-oauth.mjs';
 import {validateBooking,validateAttachments,BookingError} from '../lib/domain.mjs';
 import {mime,teacherEmail,parentScheduleEmail,PAYMENT_URL,BUSINESS} from '../lib/mailer.mjs';
 import {loadConfig,validateTeacherRoster,validatePrograms,publicConfig,validatePaymentQrs,validateBranches} from '../lib/config.mjs';
@@ -190,9 +190,9 @@ test('email MIME carries the attachment and an encoded subject',()=>{
 test('online invite comes from the center calendar with every date, both guests and one Meet link',async t=>{
   const calls=[],store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,5).toString('base64')});t.after(()=>store.close());
   store.saveGoogleToken('__center__','kieanadmin@example.test','center-refresh');
-  const c=new GoogleCalendar({store,oauth:{async refresh(token){assert.equal(token,'center-refresh');return {accessToken:'center-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify({hangoutLink:'https://meet.google.com/x'}),{status:200});}});
+  const c=new GoogleCalendar({store,oauth:{async refresh(token){assert.equal(token,'center-refresh');return {accessToken:'center-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});return url.startsWith('https://meet.googleapis.com/')?new Response('{}',{status:403}):new Response(JSON.stringify({hangoutLink:'https://meet.google.com/x'}),{status:200});}});
   const b={...validateBooking(payload(),config,NOW),id:'123',reference:'KTC-TEST',total:1000,rate:200,paid:false};
-  await c.createInvite(b);const r=JSON.parse(calls[0].options.body);
+  await c.createInvite(b);calls.shift();const r=JSON.parse(calls[0].options.body);
   assert.equal(calls[0].options.headers.Authorization,'Bearer center-token');assert.match(calls[0].url,/sendUpdates=all&conferenceDataVersion=1/);
   assert.deepEqual(r.attendees.map(a=>a.email),['parent@example.test','teacher@example.test']);assert.equal(r.conferenceData.createRequest.conferenceSolutionKey.type,'hangoutsMeet');
   assert.equal(r.start.dateTime,'2030-06-03T10:00:00');assert.equal(r.end.dateTime,'2030-06-03T10:50:00');assert.equal(r.start.timeZone,'Asia/Manila');
@@ -847,4 +847,18 @@ test('admin can back up now, see the latest backup and download its files',async
     assert.equal((await fetch(`${base}/api/admin/backups/${made.backups[0].day}/bookings.sqlite`,{headers:auth})).status,200);
     for(const bad of ['../config.json','2026-01-01/config.json','2026-11-27/kiean.env','2026-11-27/%2e%2e%2fconfig.json'])assert.equal((await fetch(`${base}/api/admin/backups/${bad}`,{headers:auth})).status,404,bad);
   }finally{app.close();store.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('online invite uses an open Meet space so anyone with the link joins without knocking',async t=>{
+  const calls=[],store=new BookingStore(':memory:',{tokenEncryptionKey:Buffer.alloc(32,5).toString('base64')});t.after(()=>store.close());
+  store.saveGoogleToken('__center__','kieanadmin@example.test','center-refresh');
+  const c=new GoogleCalendar({store,oauth:{async refresh(){return {accessToken:'center-token',expiresIn:3600};}},fetcher:async(url,options)=>{calls.push({url,options});
+    return url.startsWith('https://meet.googleapis.com/')?new Response(JSON.stringify({name:'spaces/s1',meetingUri:'https://meet.google.com/abc-defg-hij',meetingCode:'abc-defg-hij'}),{status:200}):new Response(JSON.stringify({id:'e1'}),{status:200});}});
+  const b={...validateBooking(payload(),config,NOW),id:'123',reference:'KTC-TEST',total:1000,rate:200,paid:false};
+  const invite=await c.createInvite(b);
+  assert.equal(calls[0].url,'https://meet.googleapis.com/v2/spaces');assert.deepEqual(JSON.parse(calls[0].options.body),{config:{accessType:'OPEN'}});
+  const r=JSON.parse(calls[1].options.body);
+  assert.equal(r.conferenceData.conferenceId,'abc-defg-hij');assert.equal(r.conferenceData.entryPoints[0].uri,'https://meet.google.com/abc-defg-hij');assert.equal(r.conferenceData.createRequest,undefined);
+  assert.equal(invite.hangoutLink,'https://meet.google.com/abc-defg-hij');
+  assert.ok(CENTER_SCOPES.includes('https://www.googleapis.com/auth/meetings.space.created'));
 });

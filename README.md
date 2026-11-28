@@ -44,7 +44,7 @@ It is built with **no npm dependencies**: one Node.js server, the built-in SQLit
 
 - **No new app to learn.** Each teacher connects their own Google account once. Bookings appear as private events on their own calendar, and their existing events block those times.
 - **A clear email for every booking:** schedule, learner, parent contact, learning request, attached homework, and whether it is paid.
-- **Online lessons handled:** one Google Calendar invitation with a Meet link that parent and teacher can join without being admitted.
+- **Online lessons handled:** one Google Calendar invitation with an open Meet link: anyone with the link joins straight away, with no one waiting to be admitted.
 
 ## For the center
 
